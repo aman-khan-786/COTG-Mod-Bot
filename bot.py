@@ -9,55 +9,55 @@ bot = telebot.TeleBot(TOKEN, parse_mode='Markdown')
 
 BOSS_ADMIN = 'Ben_ADFA'
 
-# Filters
+# Advanced Filters
 bad_words = ['gali1', 'gali2', 'badword', 'spam', 'scam', 'fuck', 'shit', 'bitch', 'asshole'] 
-allowed_domains = ['github.com', 'developer.android.com', 'stackoverflow.com', 'pastebin.com', 'imgur.com', 'appdevforall.org']
+
+# Ab saare useful coding, google aur youtube links safe hain!
+allowed_domains = [
+    'github.com', 'developer.android.com', 'stackoverflow.com', 'pastebin.com', 
+    'imgur.com', 'appdevforall.org', 'share.google', 'drive.google.com', 
+    'docs.google.com', 'youtube.com', 'youtu.be', 't.me/CodeOnTheGoOfficial'
+]
 
 # --- STRINGS & INFO ---
 RULES_TEXT = """📌 *Code on the Go - Official Rules:*
 
-1️⃣ *Be respectful.* Treat all members with respect. No harassment, discrimination, or personal attacks.
+1️⃣ *Be respectful.* No harassment or personal attacks.
 2️⃣ *Stay on topic.* Keep conversation focused on Code on the Go.
-3️⃣ *English only, please.* Please post in English so everyone can participate and understand the conversation.
-4️⃣ *No spam, solicitation, or self-promotion.* Do not post ads, repeated messages, or unrelated links.
-5️⃣ *Use appropriate content.* No hateful, illegal, or adult content will be tolerated.
-6️⃣ *Protect privacy.* Don’t share anyone’s personal or private information.
-7️⃣ *Admin moderation.* Admins will typically issue a warning before removing a member, but severe violations may result in immediate removal.
+3️⃣ *English only.* So everyone can understand.
+4️⃣ *No spam/ads.* Unauthorized links will be removed.
+5️⃣ *Appropriate content.* No hateful or adult content.
+6️⃣ *Protect privacy.* Don't share personal info.
+7️⃣ *Admin moderation.* Severe violations result in removal.
 
-Thanks to all of you for using the app and providing feedback! I appreciate it!"""
+Thank you for keeping the community clean! 😇"""
 
-IDE_INFO = """🚀 *About Code on the Go (COTG) IDE:*
+IDE_INFO = """🚀 *About Code on the Go (COTG):*
 
-COTG is your ultimate mobile IDE to build Android applications directly from your phone! 📱💻
-
-✨ *Features & Info:*
-• Write, compile, and run real Android apps on the go.
-• Support for modern Android development (Kotlin, Java, UI design).
-• Perfect for testing ideas and coding without a PC.
-• Built for the community, by the community.
-
-🔔 *Notice:* Awesome new updates are coming very soon! Please keep supporting the developers to make COTG even better. ❤️
+COTG is your ultimate standalone mobile IDE. Build real Android apps completely on your phone, even offline! 📱💻
 
 🌐 *Official Website:* [appdevforall.org/codeonthego](https://www.appdevforall.org/codeonthego/)"""
 
-# --- MENUS ---
+# --- DYNAMIC MENUS ---
 def get_main_menu():
     markup = InlineKeyboardMarkup()
     markup.row_width = 2
     markup.add(
         InlineKeyboardButton("📜 Group Rules", callback_data="show_rules"),
-        InlineKeyboardButton("🚀 About COTG IDE", callback_data="show_ide_info")
+        InlineKeyboardButton("📢 Official Channel", url="https://t.me/CodeOnTheGoOfficial")
     )
-    markup.add(InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{BOSS_ADMIN}"))
+    markup.add(
+        InlineKeyboardButton("🚀 About COTG IDE", callback_data="show_ide_info"),
+        InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{BOSS_ADMIN}")
+    )
     return markup
 
-# --- 1. /start & /help ---
-@bot.message_handler(commands=['start', 'help'])
+# --- 1. /start COMMAND ---
+@bot.message_handler(commands=['start'])
 def send_welcome(message):
-    user = message.from_user.first_name
-    text = (f"Hello *{user}*! 👋\n\n"
-            f"I am the Official Assistant for the **Code on the Go** community.\n"
-            f"How can I help you today?")
+    text = (f"Hello *{message.from_user.first_name}*! 👋\n\n"
+            f"I am the highly advanced AI Assistant for **Code on the Go**.\n"
+            f"Please check out our menus below or type 'help' if you need assistance!")
     bot.reply_to(message, text, reply_markup=get_main_menu())
 
 # --- 2. BUTTON CLICKS ---
@@ -70,7 +70,7 @@ def callback_query(call):
         bot.answer_callback_query(call.id, "Loading IDE info...")
         bot.send_message(call.message.chat.id, IDE_INFO, disable_web_page_preview=True)
 
-# --- 3. NEW USER WELCOME (ADVANCED) ---
+# --- 3. VIP WELCOME SYSTEM ---
 @bot.message_handler(content_types=['new_chat_members'])
 def welcome_new_member(message):
     for new_member in message.new_chat_members:
@@ -78,13 +78,12 @@ def welcome_new_member(message):
             continue
             
         name = new_member.username if new_member.username else new_member.first_name
-        welcome_text = (f"Welcome to the community, @{name}! 🎉\n\n"
-                        f"We are excited to have you here in *Code on the Go Discussions*.\n\n"
-                        f"💡 *Did you know?* COTG lets you build Android apps directly from your phone! **New updates are coming soon**, so please support the developers and share your feedback.\n\n"
-                        f"Please click the buttons below to read our official rules and learn more about the IDE.")
+        welcome_text = (f"Welcome to the discussions, @{name}! 🎉\n\n"
+                        f"Please make sure to follow our Official Channel for all the latest release notes and updates: @CodeOnTheGoOfficial 📢\n\n"
+                        f"Check out the buttons below to get started.")
         bot.send_message(message.chat.id, welcome_text, reply_markup=get_main_menu())
 
-# --- 4. SMART MODERATION & CHAT (NO MUTES) ---
+# --- 4. EXTREME AI MODERATION & CHAT ---
 @bot.message_handler(func=lambda message: True)
 def smart_moderation_and_chat(message):
     if message.text is None:
@@ -93,40 +92,21 @@ def smart_moderation_and_chat(message):
     text = message.text.lower()
     chat_id = message.chat.id
     username = message.from_user.username if message.from_user.username else message.from_user.first_name
-
-    # VIP Check
     is_boss = (message.from_user.username == BOSS_ADMIN)
 
-    # --- A. SMART CHATTING AI ---
-    if not is_boss:
-        if any(word in text for word in ["what is cotg", "ide feature", "app info", "website"]):
-            bot.reply_to(message, IDE_INFO, disable_web_page_preview=True)
-            return
-            
-        elif any(word in text for word in ["bug", "error", "crash", "help", "not working"]):
-            bot.reply_to(message, f"Hey @{username}, thanks for providing feedback! 🛠️\nOur Admin @{BOSS_ADMIN} and the dev team will look into this issue. We appreciate your support!")
-            
-        elif text in ['hi', 'hello', 'hey', 'good morning']:
-            bot.reply_to(message, f"Hello @{username}! 👋 Hope you are having a great time coding with COTG!")
-            return
-
-        elif "who made you" in text or "creator" in text or "who is your boss" in text:
-            bot.reply_to(message, f"I am the Official AI Assistant for this group, managed by our Admin @{BOSS_ADMIN}. I am here to help you with the COTG IDE! 🚀")
-            return
-
-    # --- B. WARNING SYSTEM FOR BAD WORDS (NO MUTE) ---
+    # --- STEP 1: SAFETY CHECKS (Runs first) ---
+    # A. Check for Bad Words
     if any(word in text for word in bad_words):
         if not is_boss:
             try:
                 bot.delete_message(chat_id, message.message_id)
-                warning_msg = bot.send_message(chat_id, f"⚠️ @{username}, please remember Rule #1 and #5: Use appropriate content and be respectful. Let's keep the chat clean! 😇")
-                time.sleep(10) # 10 second baad warning delete ho jayegi taaki chat clean rahe
+                warning_msg = bot.send_message(chat_id, f"⚠️ @{username}, please keep the language clean! Refer to our community rules. 😇")
+                time.sleep(10)
                 bot.delete_message(chat_id, warning_msg.message_id)
-            except Exception as e:
-                pass
-        return
+            except Exception: pass
+        return # Agar gaali hai toh aage ka AI chat nahi chalega
 
-    # --- C. WARNING SYSTEM FOR LINKS (NO MUTE) ---
+    # B. Check for Links
     if 'http' in text or 'www.' in text or 't.me' in text:
         if not is_boss:
             is_safe = False
@@ -138,14 +118,34 @@ def smart_moderation_and_chat(message):
             if not is_safe:
                 try:
                     bot.delete_message(chat_id, message.message_id)
-                    warning_msg = bot.send_message(chat_id, f"🚫 @{username}, as per Rule #4, please do not post unauthorized or promotional links. Thanks for understanding! 👍")
-                    time.sleep(10) # 10 second baad warning delete ho jayegi
+                    warning_msg = bot.send_message(chat_id, f"🚫 @{username}, unauthorized links are not allowed. Please share project files via safe platforms (GitHub, Drive, etc). 👍")
+                    time.sleep(10)
                     bot.delete_message(chat_id, warning_msg.message_id)
-                except Exception as e:
-                    pass
-                return
+                except Exception: pass
+                return # Agar link safe nahi hai toh aage ka AI chat nahi chalega
+
+    # --- STEP 2: SMART AI CHATTING (Agar message ekdum safe hai) ---
+    if not is_boss:
+        # User is asking for help or rules
+        if text == "help" or text == "rules" or "help me" in text:
+            bot.reply_to(message, f"I am here to help, @{username}! 🤖\nPlease select an option below, or join @CodeOnTheGoOfficial for updates.", reply_markup=get_main_menu())
+            
+        # User is asking about new updates (Mind Blowing Feature!)
+        elif "update" in text or "new version" in text or "release" in text:
+            update_text = ("🔥 *Latest Update Info:*\n"
+                           "A new preview release of Code on the Go (v26.08) is out!\n"
+                           "It includes experimental support for *Kotlin LSP* and other major improvements.\n\n"
+                           "Read full release notes on our official channel: @CodeOnTheGoOfficial")
+            bot.reply_to(message, update_text)
+
+        # Basic greetings
+        elif text in ['hi', 'hello', 'hey', 'good morning', 'hlo']:
+            bot.reply_to(message, f"Hello @{username}! 👋 How is your Android coding journey going today?")
+            
+        elif "how are you" in text or "who are you" in text:
+            bot.reply_to(message, "I am the advanced AI Assistant for COTG. I am functioning at 100% capacity! 🚀\nHow can I assist you today?")
 
 # Server start
 keep_alive()
-print("V3 Final Bot is running online...")
+print("V4 Ultra-Smart Bot is running online...")
 bot.polling(none_stop=True)
