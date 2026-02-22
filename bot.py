@@ -1,66 +1,151 @@
 import telebot
-import time
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from keep_alive import keep_alive
+import time
 
-# Tumhara asli Bot API Token
+# Tumhara API Token
 TOKEN = '8515104266:AAFV2a9-8Rx1RyxsLxW51t_-a1igs23trdo' 
-bot = telebot.TeleBot(TOKEN)
+bot = telebot.TeleBot(TOKEN, parse_mode='Markdown')
 
-# Galiyon ki list (Bad words) - isme aur bhi words apne hisaab se add kar lena baad mein
-bad_words = ['gali1', 'gali2', 'badword', 'spam', 'scam'] 
+BOSS_ADMIN = 'Ben_ADFA'
 
-# Safe links jo delete NAHI karne hain (Whitelist)
-allowed_domains = ['github.com', 'developer.android.com', 'stackoverflow.com', 'pastebin.com', 'imgur.com']
+# Filters
+bad_words = ['gali1', 'gali2', 'badword', 'spam', 'scam', 'fuck', 'shit', 'bitch', 'asshole'] 
+allowed_domains = ['github.com', 'developer.android.com', 'stackoverflow.com', 'pastebin.com', 'imgur.com', 'appdevforall.org']
 
-# 1. Welcome Message & Rules
+# --- STRINGS & INFO ---
+RULES_TEXT = """📌 *Code on the Go - Official Rules:*
+
+1️⃣ *Be respectful.* Treat all members with respect. No harassment, discrimination, or personal attacks.
+2️⃣ *Stay on topic.* Keep conversation focused on Code on the Go.
+3️⃣ *English only, please.* Please post in English so everyone can participate and understand the conversation.
+4️⃣ *No spam, solicitation, or self-promotion.* Do not post ads, repeated messages, or unrelated links.
+5️⃣ *Use appropriate content.* No hateful, illegal, or adult content will be tolerated.
+6️⃣ *Protect privacy.* Don’t share anyone’s personal or private information.
+7️⃣ *Admin moderation.* Admins will typically issue a warning before removing a member, but severe violations may result in immediate removal.
+
+Thanks to all of you for using the app and providing feedback! I appreciate it!"""
+
+IDE_INFO = """🚀 *About Code on the Go (COTG) IDE:*
+
+COTG is your ultimate mobile IDE to build Android applications directly from your phone! 📱💻
+
+✨ *Features & Info:*
+• Write, compile, and run real Android apps on the go.
+• Support for modern Android development (Kotlin, Java, UI design).
+• Perfect for testing ideas and coding without a PC.
+• Built for the community, by the community.
+
+🔔 *Notice:* Awesome new updates are coming very soon! Please keep supporting the developers to make COTG even better. ❤️
+
+🌐 *Official Website:* [appdevforall.org/codeonthego](https://www.appdevforall.org/codeonthego/)"""
+
+# --- MENUS ---
+def get_main_menu():
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 2
+    markup.add(
+        InlineKeyboardButton("📜 Group Rules", callback_data="show_rules"),
+        InlineKeyboardButton("🚀 About COTG IDE", callback_data="show_ide_info")
+    )
+    markup.add(InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{BOSS_ADMIN}"))
+    return markup
+
+# --- 1. /start & /help ---
+@bot.message_handler(commands=['start', 'help'])
+def send_welcome(message):
+    user = message.from_user.first_name
+    text = (f"Hello *{user}*! 👋\n\n"
+            f"I am the Official Assistant for the **Code on the Go** community.\n"
+            f"How can I help you today?")
+    bot.reply_to(message, text, reply_markup=get_main_menu())
+
+# --- 2. BUTTON CLICKS ---
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    if call.data == "show_rules":
+        bot.answer_callback_query(call.id, "Loading rules...")
+        bot.send_message(call.message.chat.id, RULES_TEXT)
+    elif call.data == "show_ide_info":
+        bot.answer_callback_query(call.id, "Loading IDE info...")
+        bot.send_message(call.message.chat.id, IDE_INFO, disable_web_page_preview=True)
+
+# --- 3. NEW USER WELCOME (ADVANCED) ---
 @bot.message_handler(content_types=['new_chat_members'])
 def welcome_new_member(message):
     for new_member in message.new_chat_members:
-        # Username agar nahi hai toh first name use karega
+        if new_member.id == bot.get_me().id:
+            continue
+            
         name = new_member.username if new_member.username else new_member.first_name
-        welcome_text = f"Welcome @{name} to Code on the Go Discussions! 🎉\n\nPlease read our rules:\n1. Be respectful.\n2. Stay on topic.\n3. English only.\n4. No spam or promo links."
-        bot.send_message(message.chat.id, welcome_text)
+        welcome_text = (f"Welcome to the community, @{name}! 🎉\n\n"
+                        f"We are excited to have you here in *Code on the Go Discussions*.\n\n"
+                        f"💡 *Did you know?* COTG lets you build Android apps directly from your phone! **New updates are coming soon**, so please support the developers and share your feedback.\n\n"
+                        f"Please click the buttons below to read our official rules and learn more about the IDE.")
+        bot.send_message(message.chat.id, welcome_text, reply_markup=get_main_menu())
 
-# 2. Message Filter (Gali aur Link check)
+# --- 4. SMART MODERATION & CHAT (NO MUTES) ---
 @bot.message_handler(func=lambda message: True)
-def moderate_chat(message):
+def smart_moderation_and_chat(message):
     if message.text is None:
         return
         
     text = message.text.lower()
     chat_id = message.chat.id
-    user_id = message.from_user.id
     username = message.from_user.username if message.from_user.username else message.from_user.first_name
 
-    # Gali Galauj Check (Delete message & Mute for 1 hour)
-    if any(word in text for word in bad_words):
-        try:
-            bot.delete_message(chat_id, message.message_id)
-            bot.send_message(chat_id, f"⚠️ @{username}, Gali galauj allowed nahi hai! Rules follow karo.")
-            # 1 hour = 3600 seconds mute
-            bot.restrict_chat_member(chat_id, user_id, until_date=time.time() + 3600)
-        except Exception as e:
-            print("Error muting user (maybe bot is not admin):", e)
-        return
+    # VIP Check
+    is_boss = (message.from_user.username == BOSS_ADMIN)
 
-    # Link Filter Check
-    if 'http' in text or 'www.' in text or 't.me' in text:
-        is_safe = False
-        for domain in allowed_domains:
-            if domain in text:
-                is_safe = True
-                break
-        
-        # Agar link safe nahi hai toh delete karo
-        if not is_safe:
-            try:
-                bot.delete_message(chat_id, message.message_id)
-                bot.send_message(chat_id, f"🚫 @{username}, Promotional links allowed nahi hain! Sirf project/assets ke safe links share karo.")
-            except Exception as e:
-                print("Error deleting link:", e)
+    # --- A. SMART CHATTING AI ---
+    if not is_boss:
+        if any(word in text for word in ["what is cotg", "ide feature", "app info", "website"]):
+            bot.reply_to(message, IDE_INFO, disable_web_page_preview=True)
+            return
+            
+        elif any(word in text for word in ["bug", "error", "crash", "help", "not working"]):
+            bot.reply_to(message, f"Hey @{username}, thanks for providing feedback! 🛠️\nOur Admin @{BOSS_ADMIN} and the dev team will look into this issue. We appreciate your support!")
+            
+        elif text in ['hi', 'hello', 'hey', 'good morning']:
+            bot.reply_to(message, f"Hello @{username}! 👋 Hope you are having a great time coding with COTG!")
             return
 
-# Server aur Bot ko 24/7 start karna
+        elif "who made you" in text or "creator" in text or "who is your boss" in text:
+            bot.reply_to(message, f"I am the Official AI Assistant for this group, managed by our Admin @{BOSS_ADMIN}. I am here to help you with the COTG IDE! 🚀")
+            return
+
+    # --- B. WARNING SYSTEM FOR BAD WORDS (NO MUTE) ---
+    if any(word in text for word in bad_words):
+        if not is_boss:
+            try:
+                bot.delete_message(chat_id, message.message_id)
+                warning_msg = bot.send_message(chat_id, f"⚠️ @{username}, please remember Rule #1 and #5: Use appropriate content and be respectful. Let's keep the chat clean! 😇")
+                time.sleep(10) # 10 second baad warning delete ho jayegi taaki chat clean rahe
+                bot.delete_message(chat_id, warning_msg.message_id)
+            except Exception as e:
+                pass
+        return
+
+    # --- C. WARNING SYSTEM FOR LINKS (NO MUTE) ---
+    if 'http' in text or 'www.' in text or 't.me' in text:
+        if not is_boss:
+            is_safe = False
+            for domain in allowed_domains:
+                if domain in text:
+                    is_safe = True
+                    break
+            
+            if not is_safe:
+                try:
+                    bot.delete_message(chat_id, message.message_id)
+                    warning_msg = bot.send_message(chat_id, f"🚫 @{username}, as per Rule #4, please do not post unauthorized or promotional links. Thanks for understanding! 👍")
+                    time.sleep(10) # 10 second baad warning delete ho jayegi
+                    bot.delete_message(chat_id, warning_msg.message_id)
+                except Exception as e:
+                    pass
+                return
+
+# Server start
 keep_alive()
-print("Bot is running online...")
+print("V3 Final Bot is running online...")
 bot.polling(none_stop=True)
