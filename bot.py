@@ -37,18 +37,22 @@ COTG is your ultimate standalone mobile IDE. Build real Android apps completely 
 • Modern Kotlin & Java support.
 • No PC or internet required.
 
-🌐 *Official Website:* [appdevforall.org/codeonthego](https://www.appdevforall.org/codeonthego/)
+🌐 *Website:* [appdevforall.org/codeonthego](https://www.appdevforall.org/codeonthego/)
+🎥 *YouTube:* [App Dev for All](https://youtube.com/@appdevforall)
 {DIVIDER}"""
 
 # --- PREMIUM VIP BUTTON LAYOUT ---
 def get_main_menu():
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("📢 Join Official Channel", url="https://t.me/CodeOnTheGoOfficial"))
+    markup.add(InlineKeyboardButton("🎥 Subscribe on YouTube", url="https://youtube.com/@appdevforall"))
+    
     btn_rules = InlineKeyboardButton("📜 Group Rules", callback_data="show_rules")
     btn_ide = InlineKeyboardButton("🚀 About COTG IDE", callback_data="show_ide_info")
     markup.row(btn_rules, btn_ide)
+    
     btn_admin = InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{BOSS_ADMIN}")
-    btn_close = InlineKeyboardButton("❌ Close Menu", callback_data="close_menu")
+    btn_close = InlineKeyboardButton("❌ Close", callback_data="close_menu")
     markup.row(btn_admin, btn_close)
     return markup
 
@@ -73,8 +77,6 @@ def bot_status(message):
     username = message.from_user.username
     if username == BOSS_ADMIN:
         bot.reply_to(message, f"🟢 **CG System Status: ONLINE & ACTIVE**\n{DIVIDER}\nBoss @{username}, all filters are running perfectly at 100% capacity! 🚀")
-    else:
-        pass # Normal user (jaise tum ya koi aur) likhega toh CG ignore karega
 
 # --- VIP FEATURE: /report COMMAND ---
 @bot.message_handler(commands=['report'])
@@ -182,5 +184,5 @@ def smart_moderation_and_chat(message):
 
 # Server start
 keep_alive()
-print("V7.1 CG Bot is running online...")
+print("V8 YouTube Update is running online...")
 bot.polling(none_stop=True)
