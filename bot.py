@@ -17,12 +17,6 @@ BOT_NAME = "CG"
 
 bot = telebot.TeleBot(TOKEN, parse_mode='Markdown')
 
-# Bot ki ID pehle se save kar lo taaki Grand Entry miss na ho!
-try:
-    BOT_ID = bot.get_me().id
-except:
-    BOT_ID = None
-
 # ================= DATABASES (Rankings & Vault) =================
 RANK_FILE = 'rankings.json'
 VAULT_FILE = 'vault.json'
@@ -188,11 +182,17 @@ def callback_query(call):
 
 @bot.message_handler(content_types=['new_chat_members'])
 def welcome_members(message):
+    try:
+        bot_info = bot.get_me() # ID ab turant fetch hogi yahan!
+    except:
+        bot_info = None
+
     for member in message.new_chat_members:
-        # Grand Entry Fix (BOT_ID check)
-        if BOT_ID and member.id == BOT_ID:
+        # GRAND ENTRY FIX!
+        if bot_info and member.id == bot_info.id:
             bot.send_message(message.chat.id, f"🚀 *HELLO EVERYONE!* 🚀\n{DIVIDER}\nI am **CG**, your Official Smart AI Assistant!\nInvited by Admin @{BOSS_ADMIN}.\n\n💡 Try `/vault` to see saved code, or `my rank` to see your title!", reply_markup=get_main_menu())
             continue
+            
         name = member.username if member.username else member.first_name
         bot.send_message(message.chat.id, f"Welcome to the community, @{name}! 🎉\n💡 I am **CG**, your AI assistant. Click below to read rules!", reply_markup=get_main_menu())
 
@@ -307,13 +307,13 @@ def smart_chat_handler(message):
             elif "who are you" in text: bot.reply_to(message, "I am **CG**! The Official Smart AI Assistant. 🤖✨")
             else: bot.reply_to(message, "Yes brother! I am operating in offline fallback mode right now.")
 
-# ================= RUN SERVER (WITH ANTI-409 FIX) =================
+# ================= RUN SERVER (WITH EXTREME 409 FIX) =================
 try:
-    bot.delete_webhook(drop_pending_updates=True) # This is the BRAMHASTRA for 409 errors!
+    bot.remove_webhook()
     time.sleep(2)
 except Exception as e:
     print(f"Webhook Clear Error: {e}")
 
 keep_alive()
-print("V17 The Ultimate Fix is LIVE!")
+print("V18 The Final Bulletproof Bot is LIVE!")
 bot.polling(none_stop=True)
