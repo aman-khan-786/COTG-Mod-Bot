@@ -13,8 +13,14 @@ from bs4 import BeautifulSoup
 # ================= CONFIGURATION =================
 TOKEN = '8515104266:AAGtADm-4BxboHfNcTB6TVKcmE7nD03r74M'
 GROQ_API_KEY = "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"
-BOSS_ADMIN = 'Ben_ADFA'          
+
+# Using escape character \ before underscore so Telegram Markdown doesn't break it
+BOSS_ADMIN_RAW = 'Ben_ADFA'
+BOSS_ADMIN_MD = 'Ben\_ADFA'          
 BOT_NAME = "CG"
+
+OFFICIAL_CHANNEL = "https://t.me/CodeOnTheGoOfficial"
+OFFICIAL_WEBSITE = "http://appdevforall.org/codeonthego"
 
 bot = telebot.TeleBot(TOKEN, parse_mode='Markdown')
 
@@ -51,17 +57,15 @@ def get_title(points):
     else: return "🔴 COTG Legend"
 
 # ================= SMART LINK FILTER WHITELIST =================
-# Sirf in domains ke links group mein allowed honge
 ALLOWED_DOMAINS = [
     'github.com', 
     'stackoverflow.com', 
     'pastebin.com', 
     'appdevforall.org',
     'developer.android.com',
-    't.me/CodeOnTheGoOfficial' # Official channel link allowed
+    't.me/CodeOnTheGoOfficial'
 ]
 
-# Regex pattern to find URLs in text
 URL_PATTERN = re.compile(r'(https?://\S+|www\.\S+)')
 
 # ================= LIVE WEBSITE SCRAPER =================
@@ -73,12 +77,12 @@ def get_live_website_info():
     if time.time() - last_scrape_time > 3600 or not cached_website_data:
         try:
             headers = {'User-Agent': 'Mozilla/5.0'}
-            res = requests.get("https://www.appdevforall.org/codeonthego", headers=headers, timeout=5)
+            res = requests.get(OFFICIAL_WEBSITE, headers=headers, timeout=5)
             soup = BeautifulSoup(res.text, 'html.parser')
             text_data = " ".join([p.text.strip() for p in soup.find_all(['p', 'h1', 'h2', 'h3', 'li']) if p.text.strip()])
             cached_website_data = text_data[:800] 
             last_scrape_time = time.time()
-        except: return "Latest updates are posted on the official channel."
+        except: return f"Latest updates are posted on the official channel: {OFFICIAL_CHANNEL}"
     return cached_website_data
 
 # ================= TEXTS =================
@@ -90,13 +94,13 @@ RULES_TEXT = f"""📌 *Code on the Go - Official Rules*
 3️⃣ *English only:* Please post in English so everyone understands.
 {DIVIDER}"""
 
-IDE_INFO = f"🚀 *About Code on the Go (COTG)*\n{DIVIDER}\nBuild real Android apps completely on your phone, even offline! 📱💻\n🌐 *Website:* [appdevforall.org](https://www.appdevforall.org/codeonthego/)\n📢 *Updates:* @CodeOnTheGoOfficial\n{DIVIDER}"
+IDE_INFO = f"🚀 *About Code on the Go (COTG)*\n{DIVIDER}\nBuild real Android apps completely on your phone, even offline! 📱💻\n🌐 *Website:* [{OFFICIAL_WEBSITE}]({OFFICIAL_WEBSITE})\n📢 *Updates:* [Join Channel]({OFFICIAL_CHANNEL})\n{DIVIDER}"
 
 def get_main_menu():
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("📢 Join Official Channel", url="https://t.me/CodeOnTheGoOfficial"))
+    markup.add(InlineKeyboardButton("📢 Join Official Channel", url=OFFICIAL_CHANNEL))
     markup.row(InlineKeyboardButton("📜 Group Rules", callback_data="show_rules"), InlineKeyboardButton("🚀 About COTG IDE", callback_data="show_ide_info"))
-    markup.row(InlineKeyboardButton("👨‍💻 Contact Admin (Boss)", url=f"https://t.me/{BOSS_ADMIN}"), InlineKeyboardButton("❌ Close", callback_data="close_menu"))
+    markup.row(InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{BOSS_ADMIN_RAW}"), InlineKeyboardButton("❌ Close", callback_data="close_menu"))
     return markup
 
 def get_back_button():
@@ -104,29 +108,26 @@ def get_back_button():
     markup.add(InlineKeyboardButton("🔙 Back", callback_data="back_to_main"))
     return markup
 
-# ================= ADVANCED AI LOGIC (BRAINWASHED PROMPT) =================
+# ================= ADVANCED AI LOGIC =================
 chat_memory = {}
 
 def get_grok_reply(user_id, user_msg, username, is_random_jump=False, is_code_review=False):
     global chat_memory
     try:
-        # STRICT IDENTITY RULES
         core_rules = f"""CRITICAL DIRECTIVES:
 1. IDENTITY: You are CG, the official moderation and dev assistant for 'Code on the Go' (COTG). 
-2. NEVER SAY AI: You must NEVER say "I am an AI", "I am a language model", or anything similar. You are just CG.
-3. THE BOSS: Your ultimate boss and creator is Ben (@{BOSS_ADMIN}). If anyone asks about the admin or creator, praise Ben highly and provide his handle.
-4. PROMOTION: Always remind people to join the official channel @CodeOnTheGoOfficial and visit appdevforall.org/codeonthego for updates.
+2. NEVER SAY AI: You must NEVER say "I am an AI" or "I am a language model". You are just CG.
+3. THE BOSS: Your ultimate boss and creator is Ben (@{BOSS_ADMIN_RAW}). If anyone asks about the admin or creator, praise Ben and give his handle.
+4. PROMOTION: Always remind people to join the official channel: {OFFICIAL_CHANNEL} and visit {OFFICIAL_WEBSITE}.
 5. NO PLAY STORE: COTG is STRICTLY NOT ON THE GOOGLE PLAY STORE. 
-6. PERSONALITY: You are highly intelligent, helpful, witty, and slightly sarcastic.
-7. LANGUAGE: Speak STRICTLY in English only. Never use Hindi.
+6. PERSONALITY: You are highly intelligent, helpful, witty, and slightly sarcastic. Speak STRICTLY in English.
 """
         if is_code_review:
             system_prompt = core_rules + "The user is sending you Kotlin/Java code. Find syntax errors, bugs, or improvements. Roast them a tiny bit for bad code, then explain how to fix it."
             messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Review this code:\n{user_msg}"}]
         else:
             extra_context = f"\n[WEBSITE INFO: {get_live_website_info()}]"
-            
-            jump_rule = "You are randomly jumping into the chat. Make a funny, slightly sarcastic comment about Android development or remind them to check @CodeOnTheGoOfficial." if is_random_jump else ""
+            jump_rule = f"You are randomly jumping into the chat. Make a funny comment about Android development or remind them to check {OFFICIAL_CHANNEL}." if is_random_jump else ""
             system_prompt = core_rules + jump_rule + extra_context
 
             if user_id not in chat_memory: chat_memory[user_id] = []
@@ -158,16 +159,16 @@ def callback_query(call):
 def welcome_members(message):
     for member in message.new_chat_members:
         if BOT_ID and member.id == BOT_ID:
-            bot.send_message(message.chat.id, f"🚀 *HELLO EVERYONE!* 🚀\n{DIVIDER}\nI am **CG**, the Official Assistant!\nMy Boss is @{BOSS_ADMIN}.\n\n💡 I monitor links, review code, and provide updates. Join @CodeOnTheGoOfficial!", reply_markup=get_main_menu())
+            bot.send_message(message.chat.id, f"🚀 *HELLO EVERYONE!* 🚀\n{DIVIDER}\nI am **CG**, the Official Assistant!\nMy Boss is @{BOSS_ADMIN_MD}.\n\n💡 Join {OFFICIAL_CHANNEL} for updates!", reply_markup=get_main_menu(), disable_web_page_preview=True)
             continue
         bot.send_message(message.chat.id, f"Welcome @{member.first_name}! 🎉\n💡 Please check the rules. No spam links allowed!", reply_markup=get_main_menu())
 
-# ================= STICKER MODERATION =================
-@bot.message_handler(content_types=['sticker'])
-def handle_stickers(message):
+# ================= STICKER & GIF MODERATION =================
+@bot.message_handler(content_types=['sticker', 'animation'])
+def handle_media(message):
     user_id = str(message.from_user.id)
     username = message.from_user.username if message.from_user.username else message.from_user.first_name
-    is_boss = (message.from_user.username == BOSS_ADMIN)
+    is_boss = (message.from_user.username == BOSS_ADMIN_RAW)
     
     if not is_boss:
         try:
@@ -175,7 +176,9 @@ def handle_stickers(message):
             if user_id in rankings:
                 rankings[user_id]["points"] = max(0, rankings[user_id]["points"] - 5)
                 save_json(rankings, RANK_FILE)
-            warn_msg = bot.send_message(message.chat.id, f"🚫 @{username}, Stickers are disabled! **(-5 Points)** 📉")
+            
+            media_type = "Stickers" if message.content_type == 'sticker' else "GIFs"
+            warn_msg = bot.send_message(message.chat.id, f"🚫 @{username}, {media_type} are disabled to keep the group clean! **(-5 Points)** 📉")
             time.sleep(5)
             bot.delete_message(message.chat.id, warn_msg.message_id)
         except: pass
@@ -185,8 +188,7 @@ def handle_stickers(message):
 def fetch_github(message):
     try:
         parts = message.text.split(maxsplit=1)
-        if len(parts) < 2:
-            return bot.reply_to(message, "⚠️ Usage: `/github [username/repo]`\nExample: `/github JetBrains/kotlin`")
+        if len(parts) < 2: return bot.reply_to(message, "⚠️ Usage: `/github [username/repo]`")
         
         repo_name = parts[1].strip()
         bot.send_chat_action(message.chat.id, 'typing')
@@ -196,27 +198,19 @@ def fetch_github(message):
             data = res.json()
             desc = data.get('description', 'No description available.')
             stars = data.get('stargazers_count', 0)
-            lang = data.get('language', 'Unknown')
-            url = data.get('html_url', '')
-            
-            text = f"🐙 **GitHub Repo Info**\n{DIVIDER}\n📦 **Name:** `{data['full_name']}`\n⭐ **Stars:** {stars}\n💻 **Language:** {lang}\n📝 **Desc:** {desc}\n🔗 [View on GitHub]({url})"
+            text = f"🐙 **GitHub Repo Info**\n{DIVIDER}\n📦 **Name:** `{data['full_name']}`\n⭐ **Stars:** {stars}\n📝 **Desc:** {desc}\n🔗 [View on GitHub]({data.get('html_url', '')})"
             bot.reply_to(message, text, disable_web_page_preview=True)
-        else:
-            bot.reply_to(message, "❌ Repository not found. Check the name.")
-    except Exception as e:
-        bot.reply_to(message, "⚠️ Error fetching GitHub data.")
+        else: bot.reply_to(message, "❌ Repository not found.")
+    except: bot.reply_to(message, "⚠️ Error fetching GitHub data.")
 
 # ================= COMMANDS =================
 @bot.message_handler(commands=['review'])
 def code_reviewer(message):
     try:
         raw_text = message.text.strip()
-        if len(raw_text) <= 7:
-            return bot.reply_to(message, "⚠️ Usage: `/review [paste your kotlin/java code here]`")
-        
+        if len(raw_text) <= 7: return bot.reply_to(message, "⚠️ Usage: `/review [paste your code here]`")
         code_to_review = raw_text[7:].strip()
         bot.send_chat_action(message.chat.id, 'typing')
-        bot.reply_to(message, "🔍 **Judging your code...**")
         
         ai_review = get_grok_reply(str(message.from_user.id), code_to_review, message.from_user.first_name, is_code_review=True)
         if ai_review: bot.reply_to(message, f"👨‍💻 **Code Review:**\n{DIVIDER}\n{ai_review}")
@@ -234,7 +228,7 @@ def smart_chat_handler(message):
     chat_id = message.chat.id
     username = message.from_user.username if message.from_user.username else message.from_user.first_name
     user_id = str(message.from_user.id)
-    is_boss = (message.from_user.username == BOSS_ADMIN)
+    is_boss = (message.from_user.username == BOSS_ADMIN_RAW)
 
     # --- 1. HARDCORE SMART LINK FILTER ---
     if not is_boss:
@@ -242,29 +236,29 @@ def smart_chat_handler(message):
         if found_urls:
             is_spam = False
             for url in found_urls:
-                # Check if the URL contains ANY of the allowed domains
                 if not any(domain in url for domain in ALLOWED_DOMAINS):
                     is_spam = True
                     break
-            
             if is_spam:
                 try:
                     bot.delete_message(chat_id, message.message_id)
                     if user_id in rankings:
                         rankings[user_id]["points"] = max(0, rankings[user_id]["points"] - 10)
                         save_json(rankings, RANK_FILE)
-                    
-                    warn_txt = f"🚫 @{username}, **Promo/Unknown Links are NOT allowed!**\nOnly GitHub, StackOverflow, and official COTG links are permitted.\n📉 Penalty: -10 Points."
-                    warn = bot.send_message(chat_id, warn_txt)
+                    warn = bot.send_message(chat_id, f"🚫 @{username}, **Promo/Unknown Links are NOT allowed!**\nOnly official COTG links are permitted.\n📉 Penalty: -10 Points.")
                     time.sleep(7); bot.delete_message(chat_id, warn.message_id)
-                    return # Stop processing this message further
+                    return 
                 except: pass
 
     # --- 2. HARDCODED COMMANDS ---
     if text_lower in ['help', '/help', 'rules', '/rules', 'menu', 'hello', 'hi', 'start', '/start']:
-        return bot.reply_to(message, f"Hello @{username}! I am **CG** 🤖\nOfficial COTG Bot. My boss is @{BOSS_ADMIN}.", reply_markup=get_main_menu())
+        welcome_text = (f"Hello @{username}! I am **CG** 🤖\n"
+                        f"Official COTG Bot. My boss is @{BOSS_ADMIN_MD}.\n\n"
+                        f"📢 **Join Official Channel:** [CodeOnTheGoOfficial]({OFFICIAL_CHANNEL})\n"
+                        f"🌐 **Website:** [{OFFICIAL_WEBSITE}]({OFFICIAL_WEBSITE})")
+        return bot.reply_to(message, welcome_text, reply_markup=get_main_menu(), disable_web_page_preview=True)
 
-    if text_lower in ['my rank', 'my ranking', '/myrank', 'rank', 'cg my rank']:
+    if text_lower in ['my rank', 'my ranking', '/myrank', 'rank']:
         data = rankings.get(user_id, {"points": 0, "streak": 0})
         return bot.reply_to(message, f"🏆 *Your Rank*\n👤 {username}\n⭐ Points: **{data['points']}**\n🔥 Streak: **{data.get('streak', 0)} Days**\n🏅 Title: {get_title(data['points'])}")
 
@@ -299,12 +293,11 @@ def smart_chat_handler(message):
     bot_triggered = False
     is_random = False
     
-    # Trigger if Bot is mentioned, replied to, or if user specifically asks about admin/updates
     if "cg" in text_lower or f"@{BOT_NAME.lower()}" in text_lower or message.chat.type == 'private': 
         bot_triggered = True
     elif message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id: 
         bot_triggered = True
-    elif any(word in text_lower for word in ['admin', 'boss', 'creator', 'update', 'latest version']):
+    elif any(word in text_lower for word in ['admin', 'boss', 'creator', 'update', 'latest version', 'download']):
         bot_triggered = True
     elif interject_counter >= 15:
         bot_triggered = True
@@ -314,7 +307,7 @@ def smart_chat_handler(message):
     if bot_triggered:
         bot.send_chat_action(chat_id, 'typing')
         ai_reply = get_grok_reply(user_id, text, username, is_random)
-        if ai_reply: bot.reply_to(message, ai_reply)
+        if ai_reply: bot.reply_to(message, ai_reply, disable_web_page_preview=True)
 
 # ================= RUN SERVER =================
 try:
@@ -323,5 +316,5 @@ try:
 except: pass
 
 keep_alive()
-print("V25 ULTIMATE ADVANCE Bot is LIVE!")
+print("V26 FINAL FIX Bot is LIVE!")
 bot.polling(none_stop=True)
