@@ -5,6 +5,7 @@ import time
 import requests
 import json
 import os
+import random
 from bs4 import BeautifulSoup
 
 # ================= CONFIGURATION =================
@@ -15,23 +16,54 @@ BOT_NAME = "CG"
 
 bot = telebot.TeleBot(TOKEN, parse_mode='Markdown')
 
-# ================= RANKING SYSTEM =================
+# ================= RANKING & TITLES =================
 RANK_FILE = 'rankings.json'
 
 def load_rankings():
     if os.path.exists(RANK_FILE):
         try:
-            with open(RANK_FILE, 'r') as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            return {}
+            with open(RANK_FILE, 'r') as f: return json.load(f)
+        except: return {}
     return {}
 
 def save_rankings(data):
-    with open(RANK_FILE, 'w') as f:
-        json.dump(data, f, indent=2)
+    with open(RANK_FILE, 'w') as f: json.dump(data, f, indent=2)
 
 rankings = load_rankings()
+user_cooldown = {} # Anti-spam dict
+msg_counter = 0    # For Auto-Quiz
+
+def get_title(points):
+    if points < 100: return "🟢 Beginner Coder"
+    elif points < 300: return "🔵 Bug Hunter"
+    elif points < 800: return "🟣 Kotlin Pro"
+    else: return "🔴 COTG Legend"
+
+# ================= QUIZ SYSTEM =================
+QUIZ_QUESTIONS = [
+    {"q": "Which programming language is officially recommended by Google for Android?", "a": "kotlin"},
+    {"q": "What extension is used for Android UI layout files?", "a": ".xml"},
+    {"q": "What is the name of the compiled Android application file format?", "a": "apk"},
+    {"q": "What tool in Android shows you the console logs and errors?", "a": "logcat"},
+    {"q": "Which component is used to navigate between different screens in Android?", "a": "intent"},
+    {"q": "What is the base class for UI components in Android?", "a": "view"},
+    {"q": "In which file do you declare Android permissions like INTERNET?", "a": "manifest"},
+    {"q": "What Android layout arranges items vertically or horizontally?", "a": "linearlayout"},
+    {"q": "What keyword is used in Java to inherit a class?", "a": "extends"},
+    {"q": "What is the new modern UI toolkit for Android by Google?", "a": "jetpack compose"},
+    {"q": "Which library is commonly used for loading images in Android?", "a": "glide"},
+    {"q": "Which local database is officially recommended for Android?", "a": "room"},
+    {"q": "What format is typically used for data parsing in REST APIs?", "a": "json"},
+    {"q": "What Kotlin feature prevents NullPointerExceptions?", "a": "null safety"},
+    {"q": "What keyword is used to declare a constant variable in Kotlin?", "a": "val"},
+    {"q": "What executes background tasks in Kotlin efficiently?", "a": "coroutines"},
+    {"q": "What file defines the build configurations in an Android project?", "a": "build.gradle"},
+    {"q": "What Android component runs in the background without a UI?", "a": "service"},
+    {"q": "Which standard layout replaces RelativeLayout for better performance?", "a": "constraintlayout"},
+    {"q": "What method is called first when an Activity is created?", "a": "oncreate"}
+]
+
+current_quiz = None
 
 # ================= LIVE WEBSITE SCRAPER =================
 cached_website_data = ""
@@ -44,62 +76,32 @@ def get_live_website_info():
             headers = {'User-Agent': 'Mozilla/5.0'}
             res = requests.get("https://www.appdevforall.org/codeonthego", headers=headers, timeout=5)
             soup = BeautifulSoup(res.text, 'html.parser')
-            paragraphs = soup.find_all(['p', 'h1', 'h2', 'h3', 'li'])
-            text_data = " ".join([p.text.strip() for p in paragraphs if p.text.strip()])
+            text_data = " ".join([p.text.strip() for p in soup.find_all(['p', 'h1', 'h2', 'h3', 'li']) if p.text.strip()])
             cached_website_data = text_data[:800] 
             last_scrape_time = time.time()
-        except Exception:
+        except:
             return "Latest info not available right now. Please check the official Telegram channel."
     return cached_website_data
 
 # ================= TEXTS & UI =================
 DIVIDER = "━━━━━━━━━━━━━━━━━━━"
-
-RULES_TEXT = f"""📌 *Code on the Go - Official Rules*
-{DIVIDER}
-1️⃣ *Be respectful:* Treat all members with respect. No harassment, discrimination, or personal attacks.
-2️⃣ *Stay on topic:* Keep conversation focused on Code on the Go.
-3️⃣ *English only:* Please post in English so everyone can participate and understand.
-4️⃣ *No spam/ads:* Do not post ads, repeated messages, or unrelated links.
-5️⃣ *Appropriate content:* No hateful, illegal, or adult content will be tolerated.
-6️⃣ *Protect privacy:* Don't share anyone's personal or private information.
-7️⃣ *Admin moderation:* Severe violations may result in immediate removal.
-{DIVIDER}
-*Thank you for keeping our community clean!* 😇"""
-
-IDE_INFO = f"""🚀 *About Code on the Go (COTG)*
-{DIVIDER}
-COTG is your ultimate standalone mobile IDE. Build real Android apps completely on your phone, even offline! 📱💻
-
-✨ *Key Features:*
-• Real-time Android app compilation.
-• Modern Kotlin & Java support.
-• Perfect for testing ideas without a PC.
-
-🌐 *Website:* [appdevforall.org/codeonthego](https://www.appdevforall.org/codeonthego/)
-🎥 *YouTube:* [App Dev for All](https://youtube.com/@appdevforall)
-{DIVIDER}"""
+RULES_TEXT = f"""📌 *Code on the Go - Official Rules*\n{DIVIDER}\n1️⃣ *Be respectful:* No harassment.\n2️⃣ *Stay on topic:* Keep conversation focused on COTG.\n3️⃣ *English only:* So everyone can understand.\n4️⃣ *No spam/ads:* Unauthorized promos will be removed.\n5️⃣ *Admin moderation:* Severe violations result in removal.\n{DIVIDER}"""
+IDE_INFO = f"""🚀 *About Code on the Go (COTG)*\n{DIVIDER}\nBuild real Android apps completely on your phone, even offline! 📱💻\n🌐 *Website:* [appdevforall.org](https://www.appdevforall.org/codeonthego/)\n🎥 *YouTube:* [App Dev for All](https://youtube.com/@appdevforall)\n{DIVIDER}"""
 
 def get_main_menu():
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("📢 Join Official Channel", url="https://t.me/CodeOnTheGoOfficial"))
     markup.add(InlineKeyboardButton("🎥 Subscribe on YouTube", url="https://youtube.com/@appdevforall"))
-    btn_rules = InlineKeyboardButton("📜 Group Rules", callback_data="show_rules")
-    btn_ide = InlineKeyboardButton("🚀 About COTG IDE", callback_data="show_ide_info")
-    markup.row(btn_rules, btn_ide)
-    btn_admin = InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{BOSS_ADMIN}")
-    btn_close = InlineKeyboardButton("❌ Close", callback_data="close_menu")
-    markup.row(btn_admin, btn_close)
+    markup.row(InlineKeyboardButton("📜 Group Rules", callback_data="show_rules"), InlineKeyboardButton("🚀 About COTG IDE", callback_data="show_ide_info"))
+    markup.row(InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{BOSS_ADMIN}"), InlineKeyboardButton("❌ Close", callback_data="close_menu"))
     return markup
 
 def get_back_button():
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("🔙 Back to Main Menu", callback_data="back_to_main"))
-    markup.add(InlineKeyboardButton("❌ Close", callback_data="close_menu"))
     return markup
 
-# ================= ADVANCED AI LOGIC (WITH MEMORY) =================
-# Ab bot aakhri 4 messages yaad rakhega per user
+# ================= ADVANCED AI LOGIC =================
 chat_memory = {}
 
 def get_grok_reply(user_id, user_msg, username):
@@ -108,97 +110,99 @@ def get_grok_reply(user_id, user_msg, username):
         extra_context = ""
         msg_lower = user_msg.lower()
         if any(w in msg_lower for w in ['update', 'new', 'feature', 'latest', 'version']):
-            live_data = get_live_website_info()
-            extra_context = f"\n\n[LIVE INFO FROM OFFICIAL WEBSITE: {live_data}]\nUse this info to answer if relevant."
+            extra_context = f"\n\n[LIVE INFO FROM OFFICIAL WEBSITE: {get_live_website_info()}]"
 
-        system_prompt = f"""You are CG, the friendly and highly intelligent AI Assistant for the 'Code on the Go' (COTG) Android coding community.
+        system_prompt = f"""You are CG, the friendly and highly intelligent AI Assistant for 'Code on the Go' (COTG) Android coding community.
 Rules:
-1. Speak ONLY in English.
-2. Keep replies SHORT and crisp.
+1. Speak ONLY in English. No other languages.
+2. Keep replies SHORT and crisp. Avoid long paragraphs.
 3. Motivate users to build Android apps.{extra_context}"""
 
-        # Memory initialization for user
-        if user_id not in chat_memory:
-            chat_memory[user_id] = []
-
-        # Add current user message to memory
+        if user_id not in chat_memory: chat_memory[user_id] = []
         chat_memory[user_id].append({"role": "user", "content": f"User: {username}\nMessage: {user_msg}"})
+        if len(chat_memory[user_id]) > 4: chat_memory[user_id] = chat_memory[user_id][-4:]
 
-        # Keep only last 4 messages to save tokens (2 from user, 2 from bot)
-        if len(chat_memory[user_id]) > 4:
-            chat_memory[user_id] = chat_memory[user_id][-4:]
-
-        messages_payload = [{"role": "system", "content": system_prompt}] + chat_memory[user_id]
-
-        headers = {
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": "llama-3.3-70b-versatile",
-            "messages": messages_payload,
-            "temperature": 0.7,
-            "max_tokens": 150
-        }
+        headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+        payload = {"model": "llama-3.3-70b-versatile", "messages": [{"role": "system", "content": system_prompt}] + chat_memory[user_id], "temperature": 0.7, "max_tokens": 150}
         
         r = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=10)
         if r.status_code == 200:
             ai_reply = r.json()['choices'][0]['message']['content'].strip()
-            # Save bot's reply to memory
             chat_memory[user_id].append({"role": "assistant", "content": ai_reply})
             return ai_reply
-        else:
-            return None
-    except Exception as e:
-        print(f"AI Error: {e}")
         return None
-
-# ================= COMMANDS =================
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    text = (f"Hello *{message.from_user.first_name}*! 👋\n{DIVIDER}\n"
-            f"I am **CG**, the highly advanced AI Assistant for Code on the Go.\n\n"
-            f"How can I assist you today? Select an option below:")
-    bot.reply_to(message, text, reply_markup=get_main_menu())
-
-@bot.message_handler(commands=['status'])
-def bot_status(message):
-    if message.from_user.username == BOSS_ADMIN:
-        bot.reply_to(message, f"🟢 **CG System Status: ONLINE**\n{DIVIDER}\nBoss @{BOSS_ADMIN}, everything is 100% active! Memory & AI functional. 🚀")
-
-@bot.message_handler(commands=['shoutout'])
-def weekly_shoutout(message):
-    if message.from_user.username != BOSS_ADMIN: return
-    if not rankings: return bot.reply_to(message, "No rankings yet!")
-    top = max(rankings.items(), key=lambda x: x[1]['points'])
-    bot.send_message(message.chat.id, f"🎉 **WEEKLY SHOUTOUT** 🎉\n\n🏆 **{top[1]['name']}** is the TOP contributor with **{top[1]['points']} points**!\n\nThank you for making the COTG community awesome! Keep it up! 🔥")
+    except: return None
 
 # ================= BUTTON CLICKS =================
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
     if call.data == "show_rules":
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=RULES_TEXT, reply_markup=get_back_button(), parse_mode='Markdown')
+        bot.edit_message_text(RULES_TEXT, call.message.chat.id, call.message.message_id, reply_markup=get_back_button(), parse_mode='Markdown')
     elif call.data == "show_ide_info":
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=IDE_INFO, reply_markup=get_back_button(), parse_mode='Markdown', disable_web_page_preview=True)
+        bot.edit_message_text(IDE_INFO, call.message.chat.id, call.message.message_id, reply_markup=get_back_button(), parse_mode='Markdown', disable_web_page_preview=True)
     elif call.data == "back_to_main":
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"Hello again! 👋\n{DIVIDER}\nI am **CG**, the highly advanced AI Assistant.", reply_markup=get_main_menu(), parse_mode='Markdown')
+        bot.edit_message_text(f"Hello again! 👋\n{DIVIDER}\nI am **CG**, the highly advanced AI Assistant.", call.message.chat.id, call.message.message_id, reply_markup=get_main_menu(), parse_mode='Markdown')
     elif call.data == "close_menu":
-        bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
+        bot.delete_message(call.message.chat.id, call.message.message_id)
 
-# ================= NEW MEMBER WELCOME =================
+# ================= GRAND ENTRY & WELCOME =================
 @bot.message_handler(content_types=['new_chat_members'])
-def welcome_new_member(message):
+def welcome_members(message):
     for member in message.new_chat_members:
-        if member.id == bot.get_me().id: continue
+        # GRAND ENTRY: Jab Bot group mein add hoga!
+        if member.id == bot.get_me().id:
+            intro_text = (f"🚀 *HELLO EVERYONE!* 🚀\n{DIVIDER}\n"
+                          f"I am **CG**, the Official Smart AI Assistant for the Code on the Go community! 🤖✨\n\n"
+                          f"I was invited here by Admin @{BOSS_ADMIN} to help you all with coding, answer your questions, and keep this group awesome!\n\n"
+                          f"💡 *What can I do?*\n"
+                          f"• Ask me coding questions!\n"
+                          f"• Type `my rank` to check your VIP Title.\n"
+                          f"• Help others to earn points & climb the leaderboard!\n\n"
+                          f"Please check out our rules and subscribe to our YouTube channel below. Let's build amazing Android apps together! 👨‍💻📱")
+            bot.send_message(message.chat.id, intro_text, reply_markup=get_main_menu())
+            continue
+            
+        # Normal User Welcome
         name = member.username if member.username else member.first_name
         text = (f"Welcome to the community, @{name}! 🎉\n{DIVIDER}\n"
                 f"We are excited to have you in *Code on the Go*.\n"
                 f"💡 I am **CG**, your AI assistant. Click below to read our rules!")
         bot.send_message(message.chat.id, text, reply_markup=get_main_menu())
 
-# ================= MAIN MESSAGE HANDLER =================
+# ================= COMMANDS =================
+@bot.message_handler(commands=['help', 'start', 'rules'])
+def send_help(message):
+    bot.reply_to(message, f"I am **CG**, here to help you! 🤖\nPlease select an option below:", reply_markup=get_main_menu())
+
+@bot.message_handler(commands=['award'])
+def award_points(message):
+    if not message.reply_to_message:
+        return bot.reply_to(message, "⚠️ Reply to someone's message with `/award 50` to give them 50 of your points for helping you!")
+    
+    try:
+        points_to_give = int(message.text.split()[1])
+        giver_id = str(message.from_user.id)
+        receiver_id = str(message.reply_to_message.from_user.id)
+        
+        if giver_id == receiver_id:
+            return bot.reply_to(message, "❌ You cannot award points to yourself!")
+            
+        if rankings.get(giver_id, {}).get("points", 0) < points_to_give:
+            return bot.reply_to(message, "❌ You don't have enough points to give!")
+            
+        rankings[giver_id]["points"] -= points_to_give
+        if receiver_id not in rankings: rankings[receiver_id] = {"points": 0, "name": message.reply_to_message.from_user.first_name}
+        rankings[receiver_id]["points"] += points_to_give
+        save_rankings(rankings)
+        
+        bot.reply_to(message, f"💸 **BOUNTY AWARDED!**\nYou gave **{points_to_give} points** to {rankings[receiver_id]['name']}! 🎉")
+    except:
+        bot.reply_to(message, "⚠️ Use format: `/award 50`")
+
+# ================= MAIN CHAT HANDLER =================
 @bot.message_handler(func=lambda message: True)
 def smart_chat_handler(message):
+    global msg_counter, current_quiz
     if not message.text: return
         
     text = message.text.lower().strip()
@@ -207,87 +211,94 @@ def smart_chat_handler(message):
     user_id = str(message.from_user.id)
     is_boss = (message.from_user.username == BOSS_ADMIN)
 
-    # --- 1. UPDATE RANKING POINTS ---
+    # --- 1. ANTI-SPAM & RANKING POINTS ---
+    current_time = time.time()
     if message.chat.type in ['group', 'supergroup']:
         if user_id not in rankings: rankings[user_id] = {"points": 0, "name": username}
-        rankings[user_id]["points"] += 2  # Msg point
+        
+        # 60 Second Cooldown (Anti-Spam)
+        if current_time - user_cooldown.get(user_id, 0) > 60:
+            rankings[user_id]["points"] += 2  
+            user_cooldown[user_id] = current_time
+            
+        if message.reply_to_message and message.reply_to_message.from_user.id != message.from_user.id: 
+            rankings[user_id]["points"] += 5 # Bonus for replying/helping
+            
         rankings[user_id]["name"] = username
-        if message.reply_to_message: rankings[user_id]["points"] += 10 # Help point
         save_rankings(rankings)
+        
+        msg_counter += 1
 
-    # --- 2. FILTERS (BAD WORDS & PROMO) ---
-    bad_words = ['gali1', 'badword', 'spam', 'fuck', 'shit', 'bitch', 'asshole']
+    # --- 2. QUIZ ANSWER CHECKER ---
+    if current_quiz and text == current_quiz["a"]:
+        bot.reply_to(message, f"🎉 **WINNER WINNER!** 🎉\n@{username} gave the right answer first!\nAnswer: **{current_quiz['a'].upper()}**\n\n🎁 You get **+100 Points**!")
+        rankings[user_id]["points"] += 100
+        save_rankings(rankings)
+        current_quiz = None
+        return
+
+    # --- 3. AUTO-QUIZ TRIGGER (Every 30 Messages) ---
+    if msg_counter >= 30:
+        msg_counter = 0
+        current_quiz = random.choice(QUIZ_QUESTIONS)
+        quiz_text = f"⏱️ **FASTEST FINGER FIRST!** ⏱️\n{DIVIDER}\n❓ *Question:* {current_quiz['q']}\n\n*Reply fast with the correct word to win 100 Points!*"
+        bot.send_message(chat_id, quiz_text, parse_mode='Markdown')
+
+    # --- 4. FILTERS ---
+    bad_words = ['gali1', 'spam', 'fuck', 'shit', 'bitch', 'asshole']
     if any(word in text for word in bad_words) and not is_boss:
         try:
             bot.delete_message(chat_id, message.message_id)
-            warn = bot.send_message(chat_id, f"⚠️ @{username}, please keep the language clean! 😇")
+            warn = bot.send_message(chat_id, f"⚠️ @{username}, keep the language clean! 😇")
             time.sleep(10); bot.delete_message(chat_id, warn.message_id)
         except: pass
         return 
 
-    promo_links = ['t.me/', 'discord.gg/', 'chat.whatsapp.com/']
-    if any(promo in text for promo in promo_links) and not is_boss:
-        if 'codeonthegoofficial' not in text and 'ben_adfa' not in text:
-            try:
-                bot.delete_message(chat_id, message.message_id)
-                warn = bot.send_message(chat_id, f"🚫 @{username}, channel or group promotions are not allowed here! 👍")
-                time.sleep(10); bot.delete_message(chat_id, warn.message_id)
-            except: pass
-            return 
+    if any(p in text for p in ['t.me/', 'discord.gg/']) and not is_boss and 'codeonthego' not in text:
+        try:
+            bot.delete_message(chat_id, message.message_id)
+            warn = bot.send_message(chat_id, f"🚫 @{username}, promotions are not allowed here! 👍")
+            time.sleep(10); bot.delete_message(chat_id, warn.message_id)
+        except: pass
+        return 
 
-    # --- 3. HARDCODED COMMAND INTERCEPTS (ABSOLUTE PRIORITY - NO AI) ---
-    if any(cmd == text for cmd in ['help', '/help', 'rules', '/rules', 'menu', 'cg help']):
-        bot.reply_to(message, f"I am **CG**, here to help you, @{username}! 🤖\nPlease select an option below:", reply_markup=get_main_menu())
+    # --- 5. PRIORITY COMMANDS (NO AI) ---
+    if text in ['my rank', 'my ranking', '/myrank', 'rank']:
+        pts = rankings.get(user_id, {"points": 0})["points"]
+        title = get_title(pts)
+        bot.reply_to(message, f"🏆 *Your Rank*\n👤 {username}\n⭐ Points: **{pts}**\n🏅 Title: {title}\nKeep coding to climb the leaderboard! 🔥")
         return
 
-    if any(cmd == text for cmd in ['my rank', 'my ranking', '/myrank', 'rank', 'cg my rank', 'cg rank']) or text.startswith('cg my rank'):
-        data = rankings.get(user_id, {"points": 0, "name": username})
-        bot.reply_to(message, f"🏆 *Your Rank*\n👤 {data['name']}\n⭐ Points: **{data['points']}**\nKeep helping others to climb the leaderboard! 🔥")
-        return
-
-    if any(cmd == text for cmd in ['leaderboard', 'top', '/top', '/leaderboard', 'ranking', 'cg leaderboard']):
-        if not rankings:
-            bot.reply_to(message, "No points tracked yet! Start chatting to earn points.")
-            return
+    if text in ['leaderboard', 'top', '/top', '/leaderboard']:
+        if not rankings: return bot.reply_to(message, "No points tracked yet!")
         sorted_users = sorted(rankings.items(), key=lambda x: x[1]['points'], reverse=True)[:10]
         lb_text = f"🏅 *Top Active Members*\n{DIVIDER}\n"
         for i, (uid, data) in enumerate(sorted_users, 1):
-            lb_text += f"{i}. **{data['name']}** — {data['points']} pts\n"
+            lb_text += f"{i}. **{data['name']}** — {data['points']} pts ({get_title(data['points'])})\n"
         bot.reply_to(message, lb_text)
         return
 
-    # --- 4. SMART AI & FALLBACK LOGIC ---
+    # --- 6. SMART AI & FALLBACK ---
     bot_triggered = False
-    
     if text == "cg":
         bot.reply_to(message, f"Yes brother! I am here. 🤖 How can I help you, @{username}?")
         return
 
-    if "cg" in text or f"@{BOT_NAME.lower()}" in text or message.chat.type == 'private':
-        bot_triggered = True
-    elif message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id:
-        bot_triggered = True
+    if "cg" in text or f"@{BOT_NAME.lower()}" in text or message.chat.type == 'private': bot_triggered = True
+    elif message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id: bot_triggered = True
 
     if bot_triggered:
         bot.send_chat_action(chat_id, 'typing')
-        # Ab hum API ko user_id bhi bhej rahe hain taaki memory kaam kare
         ai_reply = get_grok_reply(user_id, message.text, username)
         
-        if ai_reply:
-            bot.reply_to(message, ai_reply)
+        if ai_reply: bot.reply_to(message, ai_reply)
         else:
-            # === OFFLINE FALLBACK ===
-            if any(w in text for w in ['hi', 'hello', 'hey']):
-                bot.reply_to(message, f"Hello @{username}! 👋 I am **CG**. How is your coding going today?")
-            elif "who are you" in text or "your name" in text:
-                bot.reply_to(message, "I am **CG**! The Official Smart AI Assistant for the COTG community. 🤖✨")
-            elif "thanks" in text or "good bot" in text:
-                bot.reply_to(message, "You are welcome! 😇 I was programmed to keep this community awesome! 🚀")
-            else:
-                bot.reply_to(message, "Yes brother! I am currently operating in offline fallback mode. How can I help you?")
-        return
+            if any(w in text for w in ['hi', 'hello', 'hey']): bot.reply_to(message, f"Hello @{username}! 👋 I am **CG**. How is your coding going today?")
+            elif "who are you" in text: bot.reply_to(message, "I am **CG**! The Official Smart AI Assistant for the COTG community. 🤖✨")
+            elif "thanks" in text: bot.reply_to(message, "You are welcome! 😇 I was programmed to keep this community awesome! 🚀")
+            else: bot.reply_to(message, "Yes brother! I am currently operating in offline fallback mode. How can I help you?")
 
 # Server start
 keep_alive()
-print("V14 Memory & Priority AI Bot is LIVE!")
+print("V15 The Grand Entry & Gaming Bot is LIVE!")
 bot.polling(none_stop=True)
