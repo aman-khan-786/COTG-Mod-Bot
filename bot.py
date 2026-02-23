@@ -159,7 +159,7 @@ def get_grok_reply(user_id, user_msg, username, is_random_jump=False, is_code_re
             messages = [{"role": "system", "content": system_prompt}] + chat_memory[user_id]
 
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-        payload = {"model": "llama-3.3-70b-versatile", "messages": messages, "temperature": 0.6, "max_tokens": 150}
+        payload = {"model": "llama-3.3-70b-versatile", "messages": messages, "temperature": 0.6, "max_tokens": 300}
         
         r = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=12)
         if r.status_code == 200:
