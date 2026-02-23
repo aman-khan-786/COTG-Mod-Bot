@@ -68,35 +68,48 @@ URL_PATTERN = re.compile(r'(https?://\S+|www\.\S+)')
 # ================= STICKER GENERATOR ENGINE =================
 def generate_trophy_sticker(username, title="WEEKLY CHAMPION"):
     try:
-        # Load Template (Ensure sticker_bg.png is exactly 512x512)
+        # Load Template (sticker_bg.png must be in the folder)
         img = Image.open("sticker_bg.png").convert("RGBA")
         draw = ImageDraw.Draw(img)
         
-        # Load Fonts (Galafera Medium)
+        # Load Font securely with fallback to system fonts
         try:
             font_large = ImageFont.truetype("font.ttf", 45)
             font_small = ImageFont.truetype("font.ttf", 35)
-        except Exception as e:
-            print(f"Font Error: {e}")
-            font_large = ImageFont.load_default()
-            font_small = ImageFont.load_default()
+        except:
+            try:
+                # Fallback for Linux/Render servers
+                font_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 45)
+                font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 35)
+            except:
+                font_large = ImageFont.load_default()
+                font_small = ImageFont.load_default()
 
         img_w, img_h = img.size
         
-        # Draw Title (Center of the circle)
-        title_bbox = draw.textbbox((0, 0), title, font=font_large)
-        title_w = title_bbox[2] - title_bbox[0]
-        # Adjust Y position based on your specific badge design
-        draw.text(((img_w - title_w) / 2, (img_h / 2) - 80), title, fill="black", font=font_large)
+        # Draw Title (Center of the Red/White Circle)
+        title_text = title.upper()
+        try:
+            title_bbox = draw.textbbox((0, 0), title_text, font=font_large)
+            title_w = title_bbox[2] - title_bbox[0]
+        except:
+            title_w = 250
 
-        # Draw Username (Bottom Ribbon area)
+        # Draw text at Y=190 for circle center
+        draw.text(((img_w - title_w) / 2, 190), title_text, fill="black", font=font_large)
+
+        # Draw Username (Center of the Bottom Ribbon)
         name_text = username.upper()
-        name_bbox = draw.textbbox((0, 0), name_text, font=font_small)
-        name_w = name_bbox[2] - name_bbox[0]
-        # Adjust Y position to fit perfectly in your white ribbon
-        draw.text(((img_w - name_w) / 2, img_h - 130), name_text, fill="black", font=font_small)
+        try:
+            name_bbox = draw.textbbox((0, 0), name_text, font=font_small)
+            name_w = name_bbox[2] - name_bbox[0]
+        except:
+            name_w = 120
 
-        # Export to WebP for Telegram Sticker
+        # Draw text at Y=385 for ribbon center
+        draw.text(((img_w - name_w) / 2, 385), name_text, fill="black", font=font_small)
+
+        # Export to WebP for Telegram Sticker compatibility
         bio = io.BytesIO()
         bio.name = 'sticker.webp'
         img.save(bio, 'WEBP')
@@ -185,7 +198,6 @@ def callback_query(call):
 # ================= SECRET TEST COMMAND =================
 @bot.message_handler(commands=['super'])
 def secret_test_sticker(message):
-    # Boss ya Test admin hi use kar sake
     parts = message.text.split(maxsplit=1)
     test_name = parts[1] if len(parts) > 1 else message.from_user.first_name
     
@@ -197,7 +209,7 @@ def secret_test_sticker(message):
     if sticker_stream:
         bot.send_sticker(message.chat.id, sticker_stream)
     else:
-        bot.send_message(message.chat.id, "❌ **Error:** Sticker generate nahi hua. Please check if `Pillow` is installed, and `font.ttf` / `sticker_bg.png` are properly uploaded.")
+        bot.send_message(message.chat.id, "❌ **Error:** Sticker generate nahi hua. Please check if `font.ttf` / `sticker_bg.png` are properly uploaded.")
 
 # ================= COMMANDS =================
 @bot.message_handler(commands=['announce_winner'])
@@ -207,19 +219,15 @@ def announce_weekly_winner(message):
     
     if not rankings: return bot.reply_to(message, "No active users to announce.")
     
-    # Sort and find the top user
     sorted_users = sorted(rankings.items(), key=lambda x: x[1].get('points', 0), reverse=True)
     top_user_id, top_user_data = sorted_users[0]
     winner_name = top_user_data['name']
     
-    # Add a trophy
     if "trophies" not in rankings[top_user_id]: rankings[top_user_id]["trophies"] = 0
     rankings[top_user_id]["trophies"] += 1
     save_json(rankings, RANK_FILE)
     
     bot.send_chat_action(message.chat.id, 'upload_photo')
-    
-    # Generate the dynamic sticker
     sticker_stream = generate_trophy_sticker(winner_name, "WEEKLY CHAMPION")
     
     announcement_text = f"🚨 **WEEKLY CHAMPION ANNOUNCEMENT!** 🚨\n━━━━━━━━━━━━━━━━━━━\n\nCongratulations to {winner_name} for dominating the leaderboard! 🏆\n\nYou have been awarded +1 Trophy for your outstanding contribution to the COTG community.\nKeep coding, keep inspiring! 💻🔥"
@@ -227,8 +235,6 @@ def announce_weekly_winner(message):
     bot.send_message(message.chat.id, announcement_text)
     if sticker_stream:
         bot.send_sticker(message.chat.id, sticker_stream)
-    else:
-        bot.send_message(message.chat.id, "*(Error generating sticker, but trophy awarded!)*")
 
 @bot.message_handler(commands=['setbounty', 'bounty', 'submit', 'review'])
 def handle_coding_commands(message):
@@ -353,5 +359,5 @@ def smart_chat_handler(message):
 try: bot.delete_webhook(drop_pending_updates=True); time.sleep(2)
 except: pass
 keep_alive()
-print("V30 SECRET STICKER BOT IS LIVE!")
+print("V31 ULTIMATE MASTER BOT IS LIVE!")
 bot.polling(none_stop=True)
