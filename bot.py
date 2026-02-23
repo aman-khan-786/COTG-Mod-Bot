@@ -33,30 +33,23 @@ def save_rankings(data):
 
 rankings = load_rankings()
 
-# ================= LIVE WEBSITE SCRAPER (NEW!) =================
+# ================= LIVE WEBSITE SCRAPER =================
 cached_website_data = ""
 last_scrape_time = 0
 
 def get_live_website_info():
     global cached_website_data, last_scrape_time
-    # Har 1 ghante mein sirf ek baar scrape karega taaki bot fast rahe
     if time.time() - last_scrape_time > 3600 or not cached_website_data:
         try:
             headers = {'User-Agent': 'Mozilla/5.0'}
             res = requests.get("https://www.appdevforall.org/codeonthego", headers=headers, timeout=5)
             soup = BeautifulSoup(res.text, 'html.parser')
-            
-            # Website se text nikal raha hai
             paragraphs = soup.find_all(['p', 'h1', 'h2', 'h3', 'li'])
             text_data = " ".join([p.text.strip() for p in paragraphs if p.text.strip()])
-            
-            # AI ke token bachane ke liye sirf shuruwaat ka 800 character lega
             cached_website_data = text_data[:800] 
             last_scrape_time = time.time()
-        except Exception as e:
-            print(f"Scraping error: {e}")
+        except Exception:
             return "Latest info not available right now. Please check the official Telegram channel."
-    
     return cached_website_data
 
 # ================= TEXTS & UI =================
@@ -64,13 +57,13 @@ DIVIDER = "━━━━━━━━━━━━━━━━━━━"
 
 RULES_TEXT = f"""📌 *Code on the Go - Official Rules*
 {DIVIDER}
-1️⃣ *Be respectful:* No harassment or personal attacks.
-2️⃣ *Stay on topic:* Keep conversation focused on COTG.
-3️⃣ *English only:* So everyone can understand.
-4️⃣ *No spam/ads:* Unauthorized promos will be removed.
-5️⃣ *Appropriate content:* No hateful or adult content.
-6️⃣ *Protect privacy:* Don't share personal info.
-7️⃣ *Admin moderation:* Severe violations result in removal.
+1️⃣ *Be respectful:* Treat all members with respect. No harassment, discrimination, or personal attacks.
+2️⃣ *Stay on topic:* Keep conversation focused on Code on the Go.
+3️⃣ *English only:* Please post in English so everyone can participate and understand.
+4️⃣ *No spam/ads:* Do not post ads, repeated messages, or unrelated links.
+5️⃣ *Appropriate content:* No hateful, illegal, or adult content will be tolerated.
+6️⃣ *Protect privacy:* Don't share anyone's personal or private information.
+7️⃣ *Admin moderation:* Severe violations may result in immediate removal.
 {DIVIDER}
 *Thank you for keeping our community clean!* 😇"""
 
@@ -81,7 +74,7 @@ COTG is your ultimate standalone mobile IDE. Build real Android apps completely 
 ✨ *Key Features:*
 • Real-time Android app compilation.
 • Modern Kotlin & Java support.
-• No PC or internet required.
+• Perfect for testing ideas without a PC.
 
 🌐 *Website:* [appdevforall.org/codeonthego](https://www.appdevforall.org/codeonthego/)
 🎥 *YouTube:* [App Dev for All](https://youtube.com/@appdevforall)
@@ -101,14 +94,17 @@ def get_main_menu():
 
 def get_back_button():
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("🔙 Back", callback_data="back_to_main"),
-               InlineKeyboardButton("❌ Close", callback_data="close_menu"))
+    markup.add(InlineKeyboardButton("🔙 Back to Main Menu", callback_data="back_to_main"))
+    markup.add(InlineKeyboardButton("❌ Close", callback_data="close_menu"))
     return markup
 
-# ================= ADVANCED AI LOGIC =================
-def get_grok_reply(user_msg, username):
+# ================= ADVANCED AI LOGIC (WITH MEMORY) =================
+# Ab bot aakhri 4 messages yaad rakhega per user
+chat_memory = {}
+
+def get_grok_reply(user_id, user_msg, username):
+    global chat_memory
     try:
-        # Agar user update ya feature ki baat kar raha hai, toh live data inject karo
         extra_context = ""
         msg_lower = user_msg.lower()
         if any(w in msg_lower for w in ['update', 'new', 'feature', 'latest', 'version']):
@@ -117,10 +113,22 @@ def get_grok_reply(user_msg, username):
 
         system_prompt = f"""You are CG, the friendly and highly intelligent AI Assistant for the 'Code on the Go' (COTG) Android coding community.
 Rules:
-1. Speak ONLY in English. Do not use Hindi.
+1. Speak ONLY in English.
 2. Keep replies SHORT and crisp.
-3. If user says 'cg' or calls you, say "Yes brother! How can I help?".
-4. Motivate users to build Android apps.{extra_context}"""
+3. Motivate users to build Android apps.{extra_context}"""
+
+        # Memory initialization for user
+        if user_id not in chat_memory:
+            chat_memory[user_id] = []
+
+        # Add current user message to memory
+        chat_memory[user_id].append({"role": "user", "content": f"User: {username}\nMessage: {user_msg}"})
+
+        # Keep only last 4 messages to save tokens (2 from user, 2 from bot)
+        if len(chat_memory[user_id]) > 4:
+            chat_memory[user_id] = chat_memory[user_id][-4:]
+
+        messages_payload = [{"role": "system", "content": system_prompt}] + chat_memory[user_id]
 
         headers = {
             "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -128,24 +136,25 @@ Rules:
         }
         payload = {
             "model": "llama-3.3-70b-versatile",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"User: {username}\nMessage: {user_msg}"}
-            ],
+            "messages": messages_payload,
             "temperature": 0.7,
-            "max_tokens": 200
+            "max_tokens": 150
         }
         
-        r = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=8)
+        r = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=10)
         if r.status_code == 200:
-            return r.json()['choices'][0]['message']['content'].strip()
+            ai_reply = r.json()['choices'][0]['message']['content'].strip()
+            # Save bot's reply to memory
+            chat_memory[user_id].append({"role": "assistant", "content": ai_reply})
+            return ai_reply
         else:
             return None
-    except Exception:
+    except Exception as e:
+        print(f"AI Error: {e}")
         return None
 
 # ================= COMMANDS =================
-@bot.message_handler(commands=['start', 'help'])
+@bot.message_handler(commands=['start'])
 def send_welcome(message):
     text = (f"Hello *{message.from_user.first_name}*! 👋\n{DIVIDER}\n"
             f"I am **CG**, the highly advanced AI Assistant for Code on the Go.\n\n"
@@ -155,25 +164,7 @@ def send_welcome(message):
 @bot.message_handler(commands=['status'])
 def bot_status(message):
     if message.from_user.username == BOSS_ADMIN:
-        bot.reply_to(message, f"🟢 **CG System Status: ONLINE**\n{DIVIDER}\nBoss @{BOSS_ADMIN}, AI Brain, Live Scraper & Filters are 100% active! 🚀")
-
-@bot.message_handler(commands=['myrank'])
-def my_rank(message):
-    user_id = str(message.from_user.id)
-    name = message.from_user.username if message.from_user.username else message.from_user.first_name
-    data = rankings.get(user_id, {"points": 0, "name": name})
-    bot.reply_to(message, f"🏆 *Your Rank*\n👤 {data['name']}\n⭐ Points: **{data['points']}**\nKeep helping others to climb the leaderboard! 🔥")
-
-@bot.message_handler(commands=['top', 'leaderboard'])
-def show_leaderboard(message):
-    if not rankings:
-        bot.reply_to(message, "No points tracked yet! Start chatting to earn points.")
-        return
-    sorted_users = sorted(rankings.items(), key=lambda x: x[1]['points'], reverse=True)[:10]
-    text = f"🏅 *Top Active Members*\n{DIVIDER}\n"
-    for i, (uid, data) in enumerate(sorted_users, 1):
-        text += f"{i}. **{data['name']}** — {data['points']} pts\n"
-    bot.reply_to(message, text)
+        bot.reply_to(message, f"🟢 **CG System Status: ONLINE**\n{DIVIDER}\nBoss @{BOSS_ADMIN}, everything is 100% active! Memory & AI functional. 🚀")
 
 @bot.message_handler(commands=['shoutout'])
 def weekly_shoutout(message):
@@ -244,7 +235,28 @@ def smart_chat_handler(message):
             except: pass
             return 
 
-    # --- 3. SMART AI & FALLBACK LOGIC ---
+    # --- 3. HARDCODED COMMAND INTERCEPTS (ABSOLUTE PRIORITY - NO AI) ---
+    if any(cmd == text for cmd in ['help', '/help', 'rules', '/rules', 'menu', 'cg help']):
+        bot.reply_to(message, f"I am **CG**, here to help you, @{username}! 🤖\nPlease select an option below:", reply_markup=get_main_menu())
+        return
+
+    if any(cmd == text for cmd in ['my rank', 'my ranking', '/myrank', 'rank', 'cg my rank', 'cg rank']) or text.startswith('cg my rank'):
+        data = rankings.get(user_id, {"points": 0, "name": username})
+        bot.reply_to(message, f"🏆 *Your Rank*\n👤 {data['name']}\n⭐ Points: **{data['points']}**\nKeep helping others to climb the leaderboard! 🔥")
+        return
+
+    if any(cmd == text for cmd in ['leaderboard', 'top', '/top', '/leaderboard', 'ranking', 'cg leaderboard']):
+        if not rankings:
+            bot.reply_to(message, "No points tracked yet! Start chatting to earn points.")
+            return
+        sorted_users = sorted(rankings.items(), key=lambda x: x[1]['points'], reverse=True)[:10]
+        lb_text = f"🏅 *Top Active Members*\n{DIVIDER}\n"
+        for i, (uid, data) in enumerate(sorted_users, 1):
+            lb_text += f"{i}. **{data['name']}** — {data['points']} pts\n"
+        bot.reply_to(message, lb_text)
+        return
+
+    # --- 4. SMART AI & FALLBACK LOGIC ---
     bot_triggered = False
     
     if text == "cg":
@@ -258,30 +270,24 @@ def smart_chat_handler(message):
 
     if bot_triggered:
         bot.send_chat_action(chat_id, 'typing')
-        ai_reply = get_grok_reply(message.text, username)
+        # Ab hum API ko user_id bhi bhej rahe hain taaki memory kaam kare
+        ai_reply = get_grok_reply(user_id, message.text, username)
         
         if ai_reply:
             bot.reply_to(message, ai_reply)
         else:
-            # === OFFLINE FALLBACK (100% FAIL-SAFE) ===
+            # === OFFLINE FALLBACK ===
             if any(w in text for w in ['hi', 'hello', 'hey']):
                 bot.reply_to(message, f"Hello @{username}! 👋 I am **CG**. How is your coding going today?")
             elif "who are you" in text or "your name" in text:
                 bot.reply_to(message, "I am **CG**! The Official Smart AI Assistant for the COTG community. 🤖✨")
             elif "thanks" in text or "good bot" in text:
-                bot.reply_to(message, "You are welcome! 😇 I was programmed by **ARMAN** to keep this community awesome! 🚀")
-            elif "update" in text or "new" in text:
-                bot.reply_to(message, "You can check all the latest updates on our official channel @CodeOnTheGoOfficial ! 🔥")
+                bot.reply_to(message, "You are welcome! 😇 I was programmed to keep this community awesome! 🚀")
             else:
                 bot.reply_to(message, "Yes brother! I am currently operating in offline fallback mode. How can I help you?")
         return
 
-    # --- 4. QUICK HELP BUTTONS ---
-    if not is_boss and not bot_triggered:
-        if text == "help" or text == "rules":
-            bot.reply_to(message, f"I am **CG**, here to help you, @{username}! 🤖\nPlease select an option below:", reply_markup=get_main_menu())
-
 # Server start
 keep_alive()
-print("V12 Mastermind RAG AI Bot is LIVE!")
+print("V14 Memory & Priority AI Bot is LIVE!")
 bot.polling(none_stop=True)
