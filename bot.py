@@ -10,6 +10,7 @@ import re
 import threading
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
+import urllib.request
 
 # === PILLOW FOR DYNAMIC STICKERS ===
 from PIL import Image, ImageDraw, ImageFont
@@ -65,51 +66,43 @@ def get_title(points):
 ALLOWED_DOMAINS = ['github.com', 'stackoverflow.com', 'pastebin.com', 'appdevforall.org', 'developer.android.com', 't.me/CodeOnTheGoOfficial']
 URL_PATTERN = re.compile(r'(https?://\S+|www\.\S+)')
 
-# ================= STICKER GENERATOR ENGINE =================
+# ================= FOOLPROOF STICKER GENERATOR ENGINE =================
 def generate_trophy_sticker(username, title="WEEKLY CHAMPION"):
     try:
-        # Load Template (sticker_bg.png must be in the folder)
         img = Image.open("sticker_bg.png").convert("RGBA")
         draw = ImageDraw.Draw(img)
+        img_w, img_h = img.size
         
-        # Load Font securely with fallback to system fonts
+        # 1. Auto-Font Downloader (Agar font.ttf fail hua toh yeh chalega)
+        font_path = "font.ttf"
+        fallback_path = "roboto_black.ttf"
+        
+        if not os.path.exists(font_path):
+            try:
+                urllib.request.urlretrieve("https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Black.ttf", fallback_path)
+                font_path = fallback_path
+            except: pass
+
+        # 2. Load Fonts (Huge Size)
         try:
-            font_large = ImageFont.truetype("font.ttf", 45)
-            font_small = ImageFont.truetype("font.ttf", 35)
+            font_large = ImageFont.truetype(font_path, 50)
+            font_small = ImageFont.truetype(font_path, 40)
         except:
             try:
-                # Fallback for Linux/Render servers
-                font_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 45)
-                font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 35)
+                if not os.path.exists(fallback_path):
+                    urllib.request.urlretrieve("https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Black.ttf", fallback_path)
+                font_large = ImageFont.truetype(fallback_path, 50)
+                font_small = ImageFont.truetype(fallback_path, 40)
             except:
                 font_large = ImageFont.load_default()
                 font_small = ImageFont.load_default()
 
-        img_w, img_h = img.size
-        
-        # Draw Title (Center of the Red/White Circle)
-        title_text = title.upper()
-        try:
-            title_bbox = draw.textbbox((0, 0), title_text, font=font_large)
-            title_w = title_bbox[2] - title_bbox[0]
-        except:
-            title_w = 250
+        # 3. Draw Text (Perfectly Centered using anchor="mm")
+        # Y=220 for white circle center, Y=420 for bottom ribbon center
+        draw.text((img_w / 2, 220), title.upper(), fill="black", font=font_large, anchor="mm")
+        draw.text((img_w / 2, 420), username.upper(), fill="black", font=font_small, anchor="mm")
 
-        # Draw text at Y=190 for circle center
-        draw.text(((img_w - title_w) / 2, 190), title_text, fill="black", font=font_large)
-
-        # Draw Username (Center of the Bottom Ribbon)
-        name_text = username.upper()
-        try:
-            name_bbox = draw.textbbox((0, 0), name_text, font=font_small)
-            name_w = name_bbox[2] - name_bbox[0]
-        except:
-            name_w = 120
-
-        # Draw text at Y=385 for ribbon center
-        draw.text(((img_w - name_w) / 2, 385), name_text, fill="black", font=font_small)
-
-        # Export to WebP for Telegram Sticker compatibility
+        # 4. Export
         bio = io.BytesIO()
         bio.name = 'sticker.webp'
         img.save(bio, 'WEBP')
@@ -142,7 +135,8 @@ chat_memory = {}
 def get_grok_reply(user_id, user_msg, username, is_code_review=False, is_bounty_eval=False):
     global chat_memory
     try:
-        core_rules = f"IDENTITY: You are CG, expert dev assistant for COTG. Boss: @{BOSS_ADMIN_RAW}. Never call yourself an AI. Strictly English."
+        # HARDCORE BOSS INSTRUCTION ADDED HERE
+        core_rules = f"IDENTITY: You are CG, expert dev assistant for COTG. Your creator, admin, and ultimate BOSS is Ben (@{BOSS_ADMIN_RAW}). If anyone asks who made you, who is the admin, or who is your boss, firmly state that Ben created you and provides updates. Never call yourself an AI or language model. Strictly English."
         
         if is_code_review:
             system_prompt = core_rules + " Review this Kotlin/Java code. Find bugs, roast mildly, give the fix."
@@ -209,7 +203,7 @@ def secret_test_sticker(message):
     if sticker_stream:
         bot.send_sticker(message.chat.id, sticker_stream)
     else:
-        bot.send_message(message.chat.id, "❌ **Error:** Sticker generate nahi hua. Please check if `font.ttf` / `sticker_bg.png` are properly uploaded.")
+        bot.send_message(message.chat.id, "❌ **Error:** Sticker generate nahi hua.")
 
 # ================= COMMANDS =================
 @bot.message_handler(commands=['announce_winner'])
@@ -349,6 +343,7 @@ def smart_chat_handler(message):
     bot_triggered = False
     if "cg" in text_lower or f"@{BOT_NAME.lower()}" in text_lower or message.chat.type == 'private': bot_triggered = True
     elif message.reply_to_message and message.reply_to_message.from_user.id == BOT_ID: bot_triggered = True
+    elif any(word in text_lower for word in ['admin', 'boss', 'update', 'creator']): bot_triggered = True
     elif interject_counter >= 20: bot_triggered = True; interject_counter = 0
 
     if bot_triggered:
@@ -359,5 +354,5 @@ def smart_chat_handler(message):
 try: bot.delete_webhook(drop_pending_updates=True); time.sleep(2)
 except: pass
 keep_alive()
-print("V31 ULTIMATE MASTER BOT IS LIVE!")
+print("V32 FOOLPROOF MASTER BOT IS LIVE!")
 bot.polling(none_stop=True)
