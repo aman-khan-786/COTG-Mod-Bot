@@ -7,6 +7,7 @@ import json
 import os
 import random
 from datetime import datetime, timedelta
+from bs4 import BeautifulSoup
 
 # ================= CONFIGURATION =================
 TOKEN = '8515104266:AAGtADm-4BxboHfNcTB6TVKcmE7nD03r74M'
@@ -48,12 +49,14 @@ def get_title(points):
     elif points < 500: return "🟣 Kotlin Pro"
     else: return "🔴 COTG Legend"
 
-# ================= JOKES & QUIZ =================
+# ================= PURE ENGLISH JOKES & ROASTS =================
 DEV_JOKES = [
-    "😂 Programmer's joke: My code works, I don't know why. My code doesn't work, I don't know why!",
-    "🤓 Why do Java programmers wear glasses? Because they don't C#!",
-    "🔥 Shayari: Arz kiya hai... Code likhte likhte subah se sham ho gayi, Ek error solve kiya toh dusri paida ho gayi!",
-    "📱 Tip: Jetpack Compose makes UI development so much faster. Give it a try on COTG!"
+    "😂 Programmer's joke: I have 99 problems, but a bug ain't one... wait, never mind, it's 100 now.",
+    "🤓 Why do Java programmers have to wear glasses? Because they don't C#!",
+    "💀 Code on the Go Tip: Compiling is just your phone silently judging your life choices.",
+    "📱 Daily Reminder: StackOverflow is your best friend, but CG is your boss! Get coding.",
+    "🔥 A user interface is like a joke. If you have to explain it, it's probably terrible.",
+    "💻 There are 10 types of people in the world: Those who understand binary, and those who don't."
 ]
 
 QUIZ_POLLS = [
@@ -78,13 +81,30 @@ def handle_poll_answer(pollAnswer):
             rankings[user_id]["points"] += 50
             rankings[user_id]["name"] = user_name
             save_json(rankings, RANK_FILE)
-            bot.send_message(active_polls[poll_id]["chat_id"], f"🎉 BOOM! **{user_name}** selected the right answer and won **50 Points**!")
+            bot.send_message(active_polls[poll_id]["chat_id"], f"🎉 BOOM! **{user_name}** selected the right answer and won **50 Points**! Smart cookie.")
 
 CRASH_DICT = {
-    "nullpointerexception": "⚠️ **Crash: NullPointerException**\nYou are using an object that is empty (null). Check your variables!",
-    "indexoutofboundsexception": "⚠️ **Crash: IndexOutOfBoundsException**\nYou are accessing an item in a list that doesn't exist!",
-    "activitynotfoundexception": "⚠️ **Crash: ActivityNotFoundException**\nYou forgot to declare your Activity in `AndroidManifest.xml`!"
+    "nullpointerexception": "⚠️ **Crash: NullPointerException**\nYou are using an object that is empty (null). Did you forget to initialize your variables again?",
+    "indexoutofboundsexception": "⚠️ **Crash: IndexOutOfBoundsException**\nYou are accessing an item in a list that doesn't exist! Check your array size, genius.",
+    "activitynotfoundexception": "⚠️ **Crash: ActivityNotFoundException**\nYou forgot to declare your Activity in `AndroidManifest.xml`! Classic beginner mistake."
 }
+
+# ================= LIVE WEBSITE SCRAPER =================
+cached_website_data = ""
+last_scrape_time = 0
+
+def get_live_website_info():
+    global cached_website_data, last_scrape_time
+    if time.time() - last_scrape_time > 3600 or not cached_website_data:
+        try:
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            res = requests.get("https://www.appdevforall.org/codeonthego", headers=headers, timeout=5)
+            soup = BeautifulSoup(res.text, 'html.parser')
+            text_data = " ".join([p.text.strip() for p in soup.find_all(['p', 'h1', 'h2', 'h3', 'li']) if p.text.strip()])
+            cached_website_data = text_data[:800] 
+            last_scrape_time = time.time()
+        except: return "Latest updates are posted on the official Telegram channel or website."
+    return cached_website_data
 
 # ================= TEXTS =================
 DIVIDER = "━━━━━━━━━━━━━━━━━━━"
@@ -101,7 +121,8 @@ def get_main_menu():
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("📢 Join Official Channel", url="https://t.me/CodeOnTheGoOfficial"))
     markup.row(InlineKeyboardButton("📜 Group Rules", callback_data="show_rules"), InlineKeyboardButton("🚀 About COTG IDE", callback_data="show_ide_info"))
-    markup.row(InlineKeyboardButton("❌ Close", callback_data="close_menu"))
+    # ADMIN BUTTON IS BACK!
+    markup.row(InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{BOSS_ADMIN}"), InlineKeyboardButton("❌ Close", callback_data="close_menu"))
     return markup
 
 def get_back_button():
@@ -109,27 +130,28 @@ def get_back_button():
     markup.add(InlineKeyboardButton("🔙 Back to Main Menu", callback_data="back_to_main"))
     return markup
 
-# ================= ADVANCED AI LOGIC (ANTI-HALLUCINATION) =================
+# ================= ADVANCED AI LOGIC (ROAST & SARCASM PROMPT) =================
 chat_memory = {}
 
 def get_grok_reply(user_id, user_msg, username, is_random_jump=False, is_code_review=False):
     global chat_memory
     try:
-        # THE ULTIMATE BRAINWASH PROMPT
-        core_rules = """CRITICAL DIRECTIVES - OBEY STRICTLY:
-1. IDENTITY: You are CG, the official expert Android Assistant for 'Code on the Go' (COTG). NEVER say "I am a language model", "I am an AI", or apologize for your limits. You are CG.
-2. NO PLAY STORE: COTG is STRICTLY NOT ON THE GOOGLE PLAY STORE. NEVER mention the Play Store. 
-3. LINKS & UPDATES: If asked about updates, downloads, or links, ONLY provide these two sources:
-   - Official Website: https://www.appdevforall.org/codeonthego/
-   - Official Channel: @CodeOnTheGoOfficial
-4. Keep replies SHORT, friendly, and in English. Do not invent fake update versions.
+        core_rules = """CRITICAL DIRECTIVES:
+1. IDENTITY: You are CG, the official expert Android Assistant for 'Code on the Go' (COTG). NEVER say "I am an AI".
+2. NO PLAY STORE: COTG is STRICTLY NOT ON THE GOOGLE PLAY STORE. Only available on appdevforall.org or Telegram.
+3. PERSONALITY: You are highly intelligent, witty, and slightly sarcastic. Occasionally roast or playfully taunt users about their coding errors, laziness, or bugs, but keep it fun and friendly.
+4. LANGUAGE: Speak STRICTLY in English only. Never use Hindi.
 """
         if is_code_review:
-            system_prompt = core_rules + "The user is sending you Kotlin/Java code. Find syntax errors, bugs, or improvements and explain them briefly."
+            system_prompt = core_rules + "The user is sending you Kotlin/Java code. Find syntax errors, bugs, or improvements. Roast them a tiny bit for bad code, then explain how to fix it."
             messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Review this code:\n{user_msg}"}]
         else:
-            jump_rule = "You are randomly jumping into the chat to keep the group lively. Be witty." if is_random_jump else ""
-            system_prompt = core_rules + jump_rule
+            extra_context = ""
+            if any(w in user_msg.lower() for w in ['update', 'new', 'feature', 'version', 'download']):
+                extra_context = f"\n[WEBSITE INFO: {get_live_website_info()}] Tell them COTG is NOT on Play Store."
+            
+            jump_rule = "You are randomly jumping into the chat. Make a funny, slightly sarcastic comment about coding to keep them entertained." if is_random_jump else ""
+            system_prompt = core_rules + jump_rule + extra_context
 
             if user_id not in chat_memory: chat_memory[user_id] = []
             chat_memory[user_id].append({"role": "user", "content": f"User: {username}\nMessage: {user_msg}"})
@@ -138,8 +160,7 @@ def get_grok_reply(user_id, user_msg, username, is_random_jump=False, is_code_re
             messages = [{"role": "system", "content": system_prompt}] + chat_memory[user_id]
 
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-        # Temperature set to 0.2 so it STOPS making up fake facts!
-        payload = {"model": "llama-3.3-70b-versatile", "messages": messages, "temperature": 0.2, "max_tokens": 150}
+        payload = {"model": "llama-3.3-70b-versatile", "messages": messages, "temperature": 0.6, "max_tokens": 150}
         
         r = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=12)
         if r.status_code == 200:
@@ -147,25 +168,23 @@ def get_grok_reply(user_id, user_msg, username, is_random_jump=False, is_code_re
             if not is_code_review: chat_memory[user_id].append({"role": "assistant", "content": ai_reply})
             return ai_reply
         return None
-    except Exception as e: 
-        print(f"Groq Error: {e}")
-        return None
+    except Exception as e: return None
 
 # ================= BUTTON CLICKS & NEW MEMBER =================
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
     if call.data == "show_rules": bot.edit_message_text(RULES_TEXT, call.message.chat.id, call.message.message_id, reply_markup=get_back_button(), parse_mode='Markdown')
     elif call.data == "show_ide_info": bot.edit_message_text(IDE_INFO, call.message.chat.id, call.message.message_id, reply_markup=get_back_button(), parse_mode='Markdown', disable_web_page_preview=True)
-    elif call.data == "back_to_main": bot.edit_message_text(f"Hello again! 👋\n{DIVIDER}\nI am **CG**, the highly advanced AI.", call.message.chat.id, call.message.message_id, reply_markup=get_main_menu(), parse_mode='Markdown')
+    elif call.data == "back_to_main": bot.edit_message_text(f"Hello again! 👋\n{DIVIDER}\nI am **CG**, your sarcastic but helpful AI.", call.message.chat.id, call.message.message_id, reply_markup=get_main_menu(), parse_mode='Markdown')
     elif call.data == "close_menu": bot.delete_message(call.message.chat.id, call.message.message_id)
 
 @bot.message_handler(content_types=['new_chat_members'])
 def welcome_members(message):
     for member in message.new_chat_members:
         if BOT_ID and member.id == BOT_ID:
-            bot.send_message(message.chat.id, f"🚀 *HELLO EVERYONE!* 🚀\n{DIVIDER}\nI am **CG**, your Official Smart AI Assistant!\nInvited by Admin @{BOSS_ADMIN}.\n\n💡 Try `/review [code]` or `/vault`!", reply_markup=get_main_menu())
+            bot.send_message(message.chat.id, f"🚀 *HELLO EVERYONE!* 🚀\n{DIVIDER}\nI am **CG**, your Official Smart AI Assistant!\nInvited by Admin @{BOSS_ADMIN}.\n\n💡 Try `/review [code]` or `/vault`! Don't write bad code, or I will roast you. 😉", reply_markup=get_main_menu())
             continue
-        bot.send_message(message.chat.id, f"Welcome @{member.first_name}! 🎉\n💡 I am **CG**, your AI assistant. Click below to read rules!", reply_markup=get_main_menu())
+        bot.send_message(message.chat.id, f"Welcome @{member.first_name}! 🎉\n💡 I am **CG**. Click below to read the rules before you break them!", reply_markup=get_main_menu())
 
 # ================= COMMANDS =================
 @bot.message_handler(commands=['review'])
@@ -173,10 +192,10 @@ def code_reviewer(message):
     try:
         code_to_review = message.text.split(maxsplit=1)[1]
         bot.send_chat_action(message.chat.id, 'typing')
-        bot.reply_to(message, "🔍 **Analyzing your code...**")
+        bot.reply_to(message, "🔍 **Judging your code...**")
         ai_review = get_grok_reply(str(message.from_user.id), code_to_review, message.from_user.first_name, is_code_review=True)
         if ai_review: bot.reply_to(message, f"👨‍💻 **Code Review:**\n{DIVIDER}\n{ai_review}")
-        else: bot.reply_to(message, "⚠️ Couldn't review right now. Try again.")
+        else: bot.reply_to(message, "⚠️ Too many bugs, my brain crashed. Try again.")
     except: bot.reply_to(message, "⚠️ Usage: `/review [paste your kotlin/java code here]`")
 
 @bot.message_handler(commands=['savecode'])
@@ -194,12 +213,12 @@ def get_code(message):
     try:
         code_name = message.text.split()[1].lower()
         if code_name in code_vault: bot.reply_to(message, f"👨‍💻 **Code: {code_name}** (By {code_vault[code_name]['author']})\n{DIVIDER}\n`{code_vault[code_name]['code']}`", parse_mode='Markdown')
-        else: bot.reply_to(message, "❌ Code not found.")
+        else: bot.reply_to(message, "❌ Code not found. Write it yourself!")
     except: pass
 
 @bot.message_handler(commands=['vault'])
 def list_vault(message):
-    if not code_vault: return bot.reply_to(message, "🗄️ Vault is empty.")
+    if not code_vault: return bot.reply_to(message, "🗄️ Vault is empty. Start coding, people!")
     text = "🗄️ **Code Vault**\n" + DIVIDER + "\n" + "\n".join([f"• `{n}`" for n in code_vault.keys()])
     bot.reply_to(message, text)
 
@@ -224,7 +243,7 @@ def smart_chat_handler(message):
         return bot.reply_to(message, f"🏆 *Your Rank*\n👤 {username}\n⭐ Points: **{data['points']}**\n🔥 Streak: **{data.get('streak', 0)} Days**\n🏅 Title: {get_title(data['points'])}")
 
     if text in ['leaderboard', 'top', '/top', '/leaderboard']:
-        if not rankings: return bot.reply_to(message, "No points tracked yet!")
+        if not rankings: return bot.reply_to(message, "No points tracked yet! Ya'll are lazy.")
         sorted_users = sorted(rankings.items(), key=lambda x: x[1]['points'], reverse=True)[:10]
         lb_text = f"🏅 *Top Active Members*\n{DIVIDER}\n"
         for i, (uid, data) in enumerate(sorted_users, 1): lb_text += f"{i}. **{data['name']}** — {data['points']} pts\n"
@@ -275,7 +294,7 @@ def smart_chat_handler(message):
     if any(word in text for word in ['gali1', 'fuck', 'shit', 'bitch', 'asshole']) and not is_boss:
         try:
             bot.delete_message(chat_id, message.message_id)
-            warn = bot.send_message(chat_id, f"⚠️ @{username}, keep the language clean! 😇")
+            warn = bot.send_message(chat_id, f"⚠️ @{username}, keep the language clean or get kicked! 😇")
             time.sleep(10); bot.delete_message(chat_id, warn.message_id)
         except: pass
         return 
@@ -305,5 +324,5 @@ try:
 except: pass
 
 keep_alive()
-print("V21 THE ULTIMATE BRAINWASH Bot is LIVE!")
+print("V22 SARCASM & ENGLISH Bot is LIVE!")
 bot.polling(none_stop=True)
