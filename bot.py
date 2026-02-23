@@ -7,7 +7,6 @@ import json
 import os
 import random
 from datetime import datetime, timedelta
-from bs4 import BeautifulSoup
 
 # ================= CONFIGURATION =================
 TOKEN = '8515104266:AAGtADm-4BxboHfNcTB6TVKcmE7nD03r74M'
@@ -87,23 +86,6 @@ CRASH_DICT = {
     "activitynotfoundexception": "⚠️ **Crash: ActivityNotFoundException**\nYou forgot to declare your Activity in `AndroidManifest.xml`!"
 }
 
-# ================= LIVE WEBSITE SCRAPER =================
-cached_website_data = ""
-last_scrape_time = 0
-
-def get_live_website_info():
-    global cached_website_data, last_scrape_time
-    if time.time() - last_scrape_time > 3600 or not cached_website_data:
-        try:
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-            res = requests.get("https://www.appdevforall.org/codeonthego", headers=headers, timeout=5)
-            soup = BeautifulSoup(res.text, 'html.parser')
-            text_data = " ".join([p.text.strip() for p in soup.find_all(['p', 'h1', 'h2', 'h3', 'li']) if p.text.strip()])
-            cached_website_data = text_data[:800] 
-            last_scrape_time = time.time()
-        except: return "Latest updates are posted on the official Telegram channel or website."
-    return cached_website_data
-
 # ================= TEXTS =================
 DIVIDER = "━━━━━━━━━━━━━━━━━━━"
 RULES_TEXT = f"""📌 *Code on the Go - Official Rules*
@@ -127,28 +109,27 @@ def get_back_button():
     markup.add(InlineKeyboardButton("🔙 Back to Main Menu", callback_data="back_to_main"))
     return markup
 
-# ================= ADVANCED AI LOGIC (GOD MODE PROMPT) =================
+# ================= ADVANCED AI LOGIC (ANTI-HALLUCINATION) =================
 chat_memory = {}
 
 def get_grok_reply(user_id, user_msg, username, is_random_jump=False, is_code_review=False):
     global chat_memory
     try:
-        # STRICT ANTI-HALLUCINATION RULES
-        core_rules = """CRITICAL RULES YOU MUST OBEY:
-1. NEVER say "I am a large language model", "I am an AI", or mention your limitations. You are CG, an expert Android Developer Assistant.
-2. COTG (Code on the Go) IS STRICTLY NOT ON THE PLAY STORE. Do NOT mention the Play Store. It is downloaded ONLY from the official website (appdevforall.org) or Telegram channel.
-3. Keep replies SHORT, confident, and directly answer the question in English.
+        # THE ULTIMATE BRAINWASH PROMPT
+        core_rules = """CRITICAL DIRECTIVES - OBEY STRICTLY:
+1. IDENTITY: You are CG, the official expert Android Assistant for 'Code on the Go' (COTG). NEVER say "I am a language model", "I am an AI", or apologize for your limits. You are CG.
+2. NO PLAY STORE: COTG is STRICTLY NOT ON THE GOOGLE PLAY STORE. NEVER mention the Play Store. 
+3. LINKS & UPDATES: If asked about updates, downloads, or links, ONLY provide these two sources:
+   - Official Website: https://www.appdevforall.org/codeonthego/
+   - Official Channel: @CodeOnTheGoOfficial
+4. Keep replies SHORT, friendly, and in English. Do not invent fake update versions.
 """
         if is_code_review:
             system_prompt = core_rules + "The user is sending you Kotlin/Java code. Find syntax errors, bugs, or improvements and explain them briefly."
             messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Review this code:\n{user_msg}"}]
         else:
-            extra_context = ""
-            if any(w in user_msg.lower() for w in ['update', 'new', 'feature', 'version', 'download']):
-                extra_context = f"\n[WEBSITE INFO: {get_live_website_info()}] Tell them COTG is NOT on Play Store, check the website/channel."
-            
-            jump_rule = "You are randomly interjecting to keep the group lively. Be witty." if is_random_jump else ""
-            system_prompt = core_rules + jump_rule + extra_context
+            jump_rule = "You are randomly jumping into the chat to keep the group lively. Be witty." if is_random_jump else ""
+            system_prompt = core_rules + jump_rule
 
             if user_id not in chat_memory: chat_memory[user_id] = []
             chat_memory[user_id].append({"role": "user", "content": f"User: {username}\nMessage: {user_msg}"})
@@ -157,7 +138,8 @@ def get_grok_reply(user_id, user_msg, username, is_random_jump=False, is_code_re
             messages = [{"role": "system", "content": system_prompt}] + chat_memory[user_id]
 
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-        payload = {"model": "llama-3.3-70b-versatile", "messages": messages, "temperature": 0.6, "max_tokens": 150}
+        # Temperature set to 0.2 so it STOPS making up fake facts!
+        payload = {"model": "llama-3.3-70b-versatile", "messages": messages, "temperature": 0.2, "max_tokens": 150}
         
         r = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=12)
         if r.status_code == 200:
@@ -323,5 +305,5 @@ try:
 except: pass
 
 keep_alive()
-print("V20 THE GOD MODE Bot is LIVE!")
+print("V21 THE ULTIMATE BRAINWASH Bot is LIVE!")
 bot.polling(none_stop=True)
