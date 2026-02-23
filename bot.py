@@ -10,6 +10,7 @@ import re
 import threading
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
+import urllib.request
 
 # === PILLOW FOR DYNAMIC STICKERS ===
 from PIL import Image, ImageDraw, ImageFont
@@ -52,7 +53,6 @@ if "current_bounty" not in bounty_data:
     bounty_data = {"current_bounty": "No active bounty yet. Ask admins to set one!", "winners": []}
 
 user_cooldown = {} 
-msg_counter = 0    
 interject_counter = 0
 
 def get_title(points):
@@ -65,40 +65,33 @@ def get_title(points):
 ALLOWED_DOMAINS = ['github.com', 'stackoverflow.com', 'pastebin.com', 'appdevforall.org', 'developer.android.com', 't.me/CodeOnTheGoOfficial']
 URL_PATTERN = re.compile(r'(https?://\S+|www\.\S+)')
 
-# ================= AUTO-FONT DOWNLOADER =================
-FONT_FILE = "clean_font.ttf"
-FONT_URL = "https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Black.ttf"
-
-if not os.path.exists(FONT_FILE):
-    try:
-        print("Downloading fresh font...")
-        r = requests.get(FONT_URL)
-        with open(FONT_FILE, 'wb') as f:
-            f.write(r.content)
-    except Exception as e:
-        print(f"Font download failed: {e}")
-
 # ================= FOOLPROOF STICKER GENERATOR ENGINE =================
 def generate_trophy_sticker(username, title="WEEKLY CHAMPION"):
     try:
-        img = Image.open("sticker_bg.png").convert("RGBA")
+        # Load and FORCE RESIZE to Telegram 512x512 Standard
+        img_original = Image.open("sticker_bg.png").convert("RGBA")
+        img = img_original.resize((512, 512), Image.Resampling.LANCZOS)
         draw = ImageDraw.Draw(img)
-        img_w, img_h = img.size
         
-        # Load Safe Downloaded Font
+        # Load Fonts (Fallback to remote if needed)
+        font_path = "font.ttf"
+        fallback_path = "roboto.ttf"
+        if not os.path.exists(font_path):
+            try: urllib.request.urlretrieve("https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Black.ttf", fallback_path)
+            except: pass
+            font_path = fallback_path if os.path.exists(fallback_path) else "font.ttf"
+
         try:
-            font_large = ImageFont.truetype(FONT_FILE, 45)
-            font_small = ImageFont.truetype(FONT_FILE, 35)
-        except Exception as e:
-            print(f"Font Load Error: {e}")
+            font_large = ImageFont.truetype(font_path, 45)
+            font_small = ImageFont.truetype(font_path, 35)
+        except:
             font_large = ImageFont.load_default()
             font_small = ImageFont.load_default()
 
-        # Draw Title (Center of White Circle - Y=200)
-        draw.text((img_w / 2, 200), title.upper(), fill="black", font=font_large, anchor="mm")
-
-        # Draw Username (Center of Bottom Ribbon - Y=400)
-        draw.text((img_w / 2, 400), username.upper(), fill="black", font=font_small, anchor="mm")
+        # Draw Center Aligned Text (Coordinates calculated for perfect 512x512)
+        # X=256 is absolute center. Y=200 for circle, Y=430 for ribbon
+        draw.text((256, 200), title.upper(), fill="black", font=font_large, anchor="mm")
+        draw.text((256, 430), username.upper(), fill="black", font=font_small, anchor="mm")
 
         # Export to WebP
         bio = io.BytesIO()
@@ -153,7 +146,7 @@ def get_grok_reply(user_id, user_msg, username, is_code_review=False, is_bounty_
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
         payload = {"model": "llama-3.3-70b-versatile", "messages": messages, "temperature": 0.5, "max_tokens": 300}
         
-        r = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=12)
+        r = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=8)
         if r.status_code == 200:
             reply = r.json()['choices'][0]['message']['content'].strip()
             if not is_code_review and not is_bounty_eval: chat_memory[user_id].append({"role": "assistant", "content": reply})
@@ -186,28 +179,37 @@ def get_main_menu():
 def callback_query(call):
     if call.data == "close_menu": bot.delete_message(call.message.chat.id, call.message.message_id)
 
+# ================= VIP COMMANDS (NEVER BLOCKED) =================
+@bot.message_handler(commands=['start', 'help', 'menu', 'rules'])
+def welcome_command(message):
+    welcome_text = (f"Hello @{message.from_user.username or message.from_user.first_name}! I am **CG** 🤖\n"
+                    f"Official COTG Bot. My boss is @{BOSS_ADMIN_MD}.\n\n"
+                    f"📢 **Join Official Channel:** [CodeOnTheGoOfficial]({OFFICIAL_CHANNEL})\n"
+                    f"🌐 **Website:** [{OFFICIAL_WEBSITE}]({OFFICIAL_WEBSITE})")
+    bot.reply_to(message, welcome_text, reply_markup=get_main_menu(), disable_web_page_preview=True)
+
+@bot.message_handler(func=lambda msg: msg.text and msg.text.strip().lower() in ['hello', 'hi', 'hi cg', 'hello cg'])
+def basic_greetings(message):
+    bot.reply_to(message, f"Hello @{message.from_user.first_name}! 👋 I am active and ready. Type `/help` for menu.")
+
 # ================= SECRET TEST COMMAND =================
 @bot.message_handler(commands=['super'])
 def secret_test_sticker(message):
     parts = message.text.split(maxsplit=1)
     test_name = parts[1] if len(parts) > 1 else message.from_user.first_name
-    
     bot.send_chat_action(message.chat.id, 'upload_photo')
     bot.reply_to(message, f"🛠️ **SECRET TEST RUN INITIATED**\nGenerating dynamic sticker for: `{test_name}`...")
     
     sticker_stream = generate_trophy_sticker(test_name, "TEST CHAMPION")
     
-    if sticker_stream:
-        bot.send_sticker(message.chat.id, sticker_stream)
-    else:
-        bot.send_message(message.chat.id, "❌ **Error:** Sticker generate nahi hua.")
+    if sticker_stream: bot.send_sticker(message.chat.id, sticker_stream)
+    else: bot.send_message(message.chat.id, "❌ **Error:** Sticker generate nahi hua.")
 
-# ================= COMMANDS =================
+# ================= BOUNTY COMMANDS =================
 @bot.message_handler(commands=['announce_winner'])
 def announce_weekly_winner(message):
     is_boss = (message.from_user.username == BOSS_ADMIN_RAW)
     if not is_boss: return bot.reply_to(message, "🚫 Only Boss Admin can announce the winner!")
-    
     if not rankings: return bot.reply_to(message, "No active users to announce.")
     
     sorted_users = sorted(rankings.items(), key=lambda x: x[1].get('points', 0), reverse=True)
@@ -224,8 +226,7 @@ def announce_weekly_winner(message):
     announcement_text = f"🚨 **WEEKLY CHAMPION ANNOUNCEMENT!** 🚨\n━━━━━━━━━━━━━━━━━━━\n\nCongratulations to {winner_name} for dominating the leaderboard! 🏆\n\nYou have been awarded +1 Trophy for your outstanding contribution to the COTG community.\nKeep coding, keep inspiring! 💻🔥"
     
     bot.send_message(message.chat.id, announcement_text)
-    if sticker_stream:
-        bot.send_sticker(message.chat.id, sticker_stream)
+    if sticker_stream: bot.send_sticker(message.chat.id, sticker_stream)
 
 @bot.message_handler(commands=['setbounty', 'bounty', 'submit', 'review'])
 def handle_coding_commands(message):
@@ -292,15 +293,7 @@ def smart_chat_handler(message):
                     return 
                 except: pass
 
-    # --- 2. BASIC COMMANDS (RESTORED!) ---
-    if text_lower in ['help', '/help', 'rules', '/rules', 'menu', 'hello', 'hi', 'start', '/start']:
-        welcome_text = (f"Hello @{username}! I am **CG** 🤖\n"
-                        f"Official COTG Bot. My boss is @{BOSS_ADMIN_MD}.\n\n"
-                        f"📢 **Join Official Channel:** [CodeOnTheGoOfficial]({OFFICIAL_CHANNEL})\n"
-                        f"🌐 **Website:** [{OFFICIAL_WEBSITE}]({OFFICIAL_WEBSITE})")
-        return bot.reply_to(message, welcome_text, reply_markup=get_main_menu(), disable_web_page_preview=True)
-
-    # --- 3. ACCEPTED ANSWER (XP BOOST) ---
+    # --- 2. ACCEPTED ANSWER (XP BOOST) ---
     ACCEPT_WORDS = ['thanks', 'thank you', 'worked', 'solved', 'fix ho gaya', 'perfect']
     if message.reply_to_message and message.reply_to_message.from_user.id != message.from_user.id:
         if any(word in text_lower for word in ACCEPT_WORDS):
@@ -312,7 +305,7 @@ def smart_chat_handler(message):
                 save_json(rankings, RANK_FILE)
                 bot.reply_to(message.reply_to_message, f"🌟 **Accepted Answer!**\n@{username} marked this as helpful.\n🎉 **+50 XP** awarded to {helper_name}!")
 
-    # --- 4. POINTS TRACKING ---
+    # --- 3. POINTS TRACKING ---
     if message.chat.type in ['group', 'supergroup']:
         current_time_str = datetime.now().strftime("%Y-%m-%d")
         if user_id not in rankings: rankings[user_id] = {"points": 0, "name": username, "trophies": 0, "last_active_date": current_time_str}
@@ -328,7 +321,7 @@ def smart_chat_handler(message):
         save_json(rankings, RANK_FILE)
         interject_counter += 1
 
-    # --- 5. RANK & LEADERBOARD ---
+    # --- 4. RANK & LEADERBOARD ---
     if text_lower in ['my rank', 'rank']:
         data = rankings.get(user_id, {"points": 0, "trophies": 0})
         sorted_users = sorted(rankings.items(), key=lambda x: x[1].get('points', 0), reverse=True)
@@ -344,20 +337,22 @@ def smart_chat_handler(message):
             lb_text += f"**#{i}** {data['name']} {trophy_str} — {data.get('points', 0)} XP\n"
         return bot.reply_to(message, lb_text)
 
-    # --- 6. SMART AI ---
+    # --- 5. SMART AI ---
     bot_triggered = False
     if "cg" in text_lower or f"@{BOT_NAME.lower()}" in text_lower or message.chat.type == 'private': bot_triggered = True
     elif message.reply_to_message and message.reply_to_message.from_user.id == BOT_ID: bot_triggered = True
-    elif any(word in text_lower for word in ['admin', 'boss', 'update', 'creator']): bot_triggered = True
     elif interject_counter >= 20: bot_triggered = True; interject_counter = 0
 
     if bot_triggered:
         bot.send_chat_action(chat_id, 'typing')
         ai_reply = get_grok_reply(user_id, text, username)
-        if ai_reply: bot.reply_to(message, ai_reply, disable_web_page_preview=True)
+        if ai_reply: 
+            bot.reply_to(message, ai_reply, disable_web_page_preview=True)
+        else:
+            bot.reply_to(message, "🧠 Wait, my AI brain is loading or API is busy... Try again in a minute!")
 
 try: bot.delete_webhook(drop_pending_updates=True); time.sleep(2)
 except: pass
 keep_alive()
-print("V33 AUTO-FONT FIX BOT IS LIVE!")
+print("V34 - THE FINAL RESIZE & FIX BOT IS LIVE!")
 bot.polling(none_stop=True)
