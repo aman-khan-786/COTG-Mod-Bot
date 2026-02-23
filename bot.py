@@ -6,231 +6,392 @@ import requests
 import json
 import os
 import random
-from datetime import datetime
+import re
+import threading
+from datetime import datetime, timedelta
+from bs4 import BeautifulSoup
+import urllib.request
+
+# === PILLOW FOR DYNAMIC STICKERS ===
 from PIL import Image, ImageDraw, ImageFont
 import io
 
 # ================= NEW CONFIG =================
 TOKEN = '8515104266:AAF_hv7wTh238-mjnYkKeLGL0Q5tcC2ykks'
 
-# DUAL GROQ KEYS (Auto Fallback)
+# DUAL GROQ KEYS - AUTO FALLBACK
 GROQ_KEYS = [
     "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",  # NEW KEY
-    "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"   # OLD KEY (backup)
+    "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"   # OLD KEY
 ]
 
-BOSS_ADMIN_RAW = "Ben_ADFA"
-BOSS_ADMIN_DISPLAY = "@Ben\\_ADFA"
+BOSS_ADMIN_RAW = 'Ben_ADFA'
+BOSS_ADMIN_MD = 'Ben\_ADFA'          
 BOT_NAME = "CG"
+
 OFFICIAL_CHANNEL = "https://t.me/CodeOnTheGoOfficial"
 OFFICIAL_WEBSITE = "http://appdevforall.org/codeonthego"
 
-bot = telebot.TeleBot(TOKEN, parse_mode='MarkdownV2')
+bot = telebot.TeleBot(TOKEN, parse_mode='Markdown')
 
-try:
-    me = bot.get_me()
-    BOT_ID = me.id
-    BOT_USERNAME = me.username.lower()
-except:
-    BOT_ID = None
-    BOT_USERNAME = None
+try: BOT_ID = bot.get_me().id
+except: BOT_ID = None
 
-# ================= DATABASE =================
+# ================= DATABASES =================
 RANK_FILE = 'rankings.json'
+BOUNTY_FILE = 'bounty.json'
 
-def load_json(file):
-    if os.path.exists(file):
-        try: return json.load(open(file))
+def load_json(file_path):
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r') as f: return json.load(f)
         except: return {}
     return {}
 
-def save_json(data, file):
-    with open(file, 'w') as f: json.dump(data, f, indent=2)
+def save_json(data, file_path):
+    with open(file_path, 'w') as f: json.dump(data, f, indent=2)
 
 rankings = load_json(RANK_FILE)
-chat_memory = {}
+bounty_data = load_json(BOUNTY_FILE)
 
-# ================= PERFECT TROPHY STICKER =================
-def generate_trophy_sticker(name, title="WEEKLY CHAMPION"):
+if "current_bounty" not in bounty_data:
+    bounty_data = {"current_bounty": "No active bounty yet. Ask admins to set one!", "winners": []}
+
+user_cooldown = {} 
+interject_counter = 0
+
+def get_title(points):
+    if points < 50: return "🟢 Junior Coder"
+    elif points < 200: return "🔵 Bug Hunter"
+    elif points < 500: return "🟣 Kotlin Pro"
+    elif points < 1000: return "🟠 COTG Architect"
+    else: return "🔴 Grandmaster"
+
+ALLOWED_DOMAINS = ['github.com', 'stackoverflow.com', 'pastebin.com', 'appdevforall.org', 'developer.android.com', 't.me/CodeOnTheGoOfficial']
+URL_PATTERN = re.compile(r'(https?://\S+|www\.\S+)')
+
+# ================= BAD WORDS FILTER =================
+BAD_WORDS = ['fuck', 'shit', 'bitch', 'asshole', 'cunt', 'dick', 'pussy', 'chut', 'bc', 'madarchod', 'randi']
+
+# ================= IMPROVED TROPHY STICKER =================
+def generate_trophy_sticker(username, title="WEEKLY CHAMPION"):
     try:
-        img = Image.open("sticker_bg.png").convert("RGBA").resize((512, 512), Image.Resampling.LANCZOS)
+        img_original = Image.open("sticker_bg.png").convert("RGBA")
+        img = img_original.resize((512, 512), Image.Resampling.LANCZOS)
         draw = ImageDraw.Draw(img)
-        try:
-            font_big = ImageFont.truetype("font.ttf", 52)
-            font_med = ImageFont.truetype("font.ttf", 38)
-            font_small = ImageFont.truetype("font.ttf", 28)
-        except:
-            font_big = font_med = font_small = ImageFont.load_default()
+        
+        font_path = "font.ttf"
+        fallback_path = "roboto.ttf"
+        if not os.path.exists(font_path):
+            try: urllib.request.urlretrieve("https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Black.ttf", fallback_path)
+            except: pass
+            font_path = fallback_path if os.path.exists(fallback_path) else "font.ttf"
 
-        draw.text((256, 160), title.upper(), fill=(0,0,0,180), font=font_big, anchor="mm")
-        draw.text((256, 160), title.upper(), fill=(255,215,0), font=font_big, anchor="mm")
-        draw.text((256, 380), name.upper(), fill=(0,0,0,180), font=font_med, anchor="mm")
-        draw.text((256, 380), name.upper(), fill=(255,215,0), font=font_med, anchor="mm")
-        draw.text((256, 460), "CODE ON THE GO", fill=(255,255,255,220), font=font_small, anchor="mm")
+        try:
+            font_large = ImageFont.truetype(font_path, 48)
+            font_small = ImageFont.truetype(font_path, 36)
+        except:
+            font_large = ImageFont.load_default()
+            font_small = ImageFont.load_default()
+
+        draw.text((256, 190), title.upper(), fill=(0,0,0,180), font=font_large, anchor="mm")
+        draw.text((256, 190), title.upper(), fill=(255,215,0), font=font_large, anchor="mm")
+        draw.text((256, 420), username.upper(), fill=(0,0,0,180), font=font_small, anchor="mm")
+        draw.text((256, 420), username.upper(), fill=(255,215,0), font=font_small, anchor="mm")
+        draw.text((256, 470), "CODE ON THE GO", fill=(255,255,255,220), font=ImageFont.truetype(font_path, 26) if os.path.exists(font_path) else ImageFont.load_default(), anchor="mm")
 
         bio = io.BytesIO()
-        bio.name = 'trophy.webp'
+        bio.name = 'sticker.webp'
         img.save(bio, 'WEBP', quality=95)
         bio.seek(0)
         return bio
-    except:
+    except Exception as e:
+        print(f"Sticker Error: {e}")
         return None
 
-# ================= MULTI-KEY GROQ AI =================
-def get_grok_reply(user_id, user_msg, username):
-    for api_key in GROQ_KEYS:   # Try both keys automatically
+# ================= LIVE WEBSITE SCRAPER (kept original) =================
+cached_website_data = ""
+last_scrape_time = 0
+
+def get_live_website_info():
+    global cached_website_data, last_scrape_time
+    if time.time() - last_scrape_time > 3600 or not cached_website_data:
         try:
-            system = f"""You are CG, the official English-only assistant of Code on the Go (offline Android IDE).
-Your creator and boss is Ben {BOSS_ADMIN_DISPLAY}. 
-Always answer in clean English. Be friendly, fun and helpful like a real dev friend."""
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            res = requests.get(OFFICIAL_WEBSITE, headers=headers, timeout=5)
+            soup = BeautifulSoup(res.text, 'html.parser')
+            text_data = " ".join([p.text.strip() for p in soup.find_all(['p', 'h1', 'h2', 'h3', 'li']) if p.text.strip()])
+            cached_website_data = text_data[:800] 
+            last_scrape_time = time.time()
+        except: return f"Latest updates are posted on the official channel: {OFFICIAL_CHANNEL}"
+    return cached_website_data
 
-            if user_id not in chat_memory:
-                chat_memory[user_id] = []
-            chat_memory[user_id].append({"role": "user", "content": user_msg})
-            if len(chat_memory[user_id]) > 6:
-                chat_memory[user_id] = chat_memory[user_id][-6:]
+# ================= DUAL KEY AI + FALLBACK =================
+chat_memory = {}
 
-            payload = {
-                "model": "llama-3.3-70b-versatile",
-                "messages": [{"role": "system", "content": system}] + chat_memory[user_id],
-                "temperature": 0.7,
-                "max_tokens": 400
-            }
+def get_grok_reply(user_id, user_msg, username, is_code_review=False, is_bounty_eval=False):
+    for api_key in GROQ_KEYS:  # Try both keys automatically
+        try:
+            core_rules = f"IDENTITY: You are CG, expert dev assistant for COTG. Your creator, admin, and ultimate BOSS is Ben (@{BOSS_ADMIN_RAW}). Always reply in proper English. Never call yourself AI."
+            
+            if is_code_review:
+                system_prompt = core_rules + " Review this Kotlin/Java code. Find bugs, roast mildly, give the fix."
+                messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Review:\n{user_msg}"}]
+            elif is_bounty_eval:
+                system_prompt = "You are a strict programming judge. Reply strictly with 'PASS:' or 'FAIL:'."
+                task = bounty_data.get("current_bounty", "")
+                messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Task: {task}\nCode:\n{user_msg}"}]
+            else:
+                extra_context = f"\n[WEBSITE INFO: {get_live_website_info()}]"
+                system_prompt = core_rules + extra_context
+                if user_id not in chat_memory: chat_memory[user_id] = []
+                chat_memory[user_id].append({"role": "user", "content": f"{username}: {user_msg}"})
+                if len(chat_memory[user_id]) > 4: chat_memory[user_id] = chat_memory[user_id][-4:]
+                messages = [{"role": "system", "content": system_prompt}] + chat_memory[user_id]
 
-            r = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                json=payload,
-                headers={"Authorization": f"Bearer {api_key}"},
-                timeout=8
-            )
-
+            headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+            payload = {"model": "llama-3.3-70b-versatile", "messages": messages, "temperature": 0.6, "max_tokens": 350}
+            
+            r = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=9)
             if r.status_code == 200:
                 reply = r.json()['choices'][0]['message']['content'].strip()
-                chat_memory[user_id].append({"role": "assistant", "content": reply})
+                if not is_code_review and not is_bounty_eval: chat_memory[user_id].append({"role": "assistant", "content": reply})
                 return reply
         except:
-            continue  # Try next key
-    return "Hey bro, my brain is a bit busy right now... Try again in 5 seconds! 🔥"
+            continue  # Next key
+    return None
 
-# ================= MENU =================
+# ================= MEDIA + BAD WORDS + GIF FILTER =================
+@bot.message_handler(content_types=['sticker', 'animation', 'video_note'])
+def handle_media(message):
+    user_id = str(message.from_user.id)
+    is_boss = (message.from_user.username == BOSS_ADMIN_RAW)
+    if not is_boss:
+        try:
+            bot.delete_message(message.chat.id, message.message_id)
+            if user_id in rankings:
+                rankings[user_id]["points"] = max(0, rankings[user_id]["points"] - 10)
+                save_json(rankings, RANK_FILE)
+        except: pass
+
+# ================= NEW USERS AUTO WELCOME =================
+@bot.message_handler(content_types=['new_chat_members'])
+def welcome_new_members(message):
+    for member in message.new_chat_members:
+        if member.id == BOT_ID: continue
+        uid = str(member.id)
+        name = member.first_name
+        if uid not in rankings:
+            rankings[uid] = {"points": 0, "name": name, "trophies": 0, "last_active_date": datetime.now().strftime("%Y-%m-%d")}
+        rankings[uid]["points"] += 50
+        save_json(rankings, RANK_FILE)
+        
+        welcome_text = f"🎉 *Welcome to COTG Group, {name}!* 🎉\n\nYou received **+50 XP** welcome bonus!\nJoin official channel: {OFFICIAL_CHANNEL}\nType /help for commands.\nHappy coding! 💻🔥"
+        bot.reply_to(message, welcome_text, reply_markup=get_main_menu())
+
+# ================= KEYBOARDS & CALLBACK =================
 def get_main_menu():
-    m = InlineKeyboardMarkup(row_width=2)
-    m.add(InlineKeyboardButton("📢 Official Channel", url=OFFICIAL_CHANNEL))
-    m.add(InlineKeyboardButton("🌐 Website", url=OFFICIAL_WEBSITE))
-    m.add(InlineKeyboardButton("👑 Contact Ben", url=f"https://t.me/{BOSS_ADMIN_RAW}"))
-    m.add(InlineKeyboardButton("❌ Close", callback_data="close"))
-    return m
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("📢 Join Official Channel", url=OFFICIAL_CHANNEL))
+    markup.row(InlineKeyboardButton("🚀 About COTG IDE", url=OFFICIAL_WEBSITE), InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{BOSS_ADMIN_RAW}"))
+    markup.add(InlineKeyboardButton("❌ Close", callback_data="close_menu"))
+    return markup
 
-# ================= COMMANDS =================
-@bot.message_handler(commands=['start', 'help', 'menu'])
-def welcome(message):
-    text = f"""👋 Hello {message.from_user.first_name}!
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    if call.data == "close_menu": bot.delete_message(call.message.chat.id, call.message.message_id)
 
-I am **CG** — Official Assistant of Code on the Go.
+# ================= VIP COMMANDS (original + fixed) =================
+@bot.message_handler(commands=['start', 'help', 'menu', 'rules'])
+def welcome_command(message):
+    welcome_text = (f"Hello @{message.from_user.username or message.from_user.first_name}! I am **CG** 🤖\n"
+                    f"Official COTG Bot. My boss is @{BOSS_ADMIN_MD}.\n\n"
+                    f"📢 **Join Official Channel:** [CodeOnTheGoOfficial]({OFFICIAL_CHANNEL})\n"
+                    f"🌐 **Website:** [{OFFICIAL_WEBSITE}]({OFFICIAL_WEBSITE})")
+    bot.reply_to(message, welcome_text, reply_markup=get_main_menu(), disable_web_page_preview=True)
 
-My boss is **Ben {BOSS_ADMIN_DISPLAY}**
+@bot.message_handler(commands=['motivate'])
+def daily_motivate(message):
+    quotes = [
+        "The best way to predict the future is to code it. Keep grinding! 💻",
+        "Every bug you fix today makes you a better developer tomorrow. 🔥",
+        "Code is like humor. When you have to explain it, it’s bad. — Cory House",
+        "Build it first, optimize later. Ship it!",
+        "Small daily commits > one big perfect project."
+    ]
+    bot.reply_to(message, f"🌅 **Daily Dev Motivation**\n\n{random.choice(quotes)}\n\nType anything to chat with CG!")
 
-Just chat with me or use commands!"""
-    bot.reply_to(message, text, reply_markup=get_main_menu())
-
-@bot.message_handler(commands=['admin'])
-def admin_cmd(message):
-    bot.reply_to(message, f"👑 **Admin & Creator**\n\n**Ben {BOSS_ADMIN_DISPLAY}**\nContact: @Ben_ADFA")
-
+# ================= SECRET TEST + ANNOUNCE (original) =================
 @bot.message_handler(commands=['super'])
-def test_trophy(message):
-    name = message.from_user.first_name.upper()
-    bot.reply_to(message, f"🛠️ Generating trophy for **{name}**...")
-    sticker = generate_trophy_sticker(name, "TEST CHAMPION")
-    if sticker:
-        bot.send_sticker(message.chat.id, sticker)
+def secret_test_sticker(message):
+    parts = message.text.split(maxsplit=1)
+    test_name = parts[1] if len(parts) > 1 else message.from_user.first_name
+    bot.send_chat_action(message.chat.id, 'upload_photo')
+    bot.reply_to(message, f"🛠️ **SECRET TEST RUN INITIATED**\nGenerating dynamic sticker for: `{test_name}`...")
+    sticker_stream = generate_trophy_sticker(test_name, "TEST CHAMPION")
+    if sticker_stream: bot.send_sticker(message.chat.id, sticker_stream)
+    else: bot.send_message(message.chat.id, "❌ Sticker generate nahi hua.")
 
 @bot.message_handler(commands=['announce_winner'])
-def announce_winner(message):
-    if message.from_user.username != BOSS_ADMIN_RAW:
-        return bot.reply_to(message, "❌ Only Ben can announce winner!")
-    if not rankings:
-        return bot.reply_to(message, "No users yet.")
+def announce_weekly_winner(message):
+    is_boss = (message.from_user.username == BOSS_ADMIN_RAW)
+    if not is_boss: return bot.reply_to(message, "🚫 Only Boss Admin can announce the winner!")
+    if not rankings: return bot.reply_to(message, "No active users to announce.")
     
-    top_id = max(rankings, key=lambda x: rankings[x].get('points', 0))
-    name = rankings[top_id]['name']
-    rankings[top_id]['trophies'] = rankings[top_id].get('trophies', 0) + 1
+    sorted_users = sorted(rankings.items(), key=lambda x: x[1].get('points', 0), reverse=True)
+    top_user_id, top_user_data = sorted_users[0]
+    winner_name = top_user_data['name']
+    
+    if "trophies" not in rankings[top_user_id]: rankings[top_user_id]["trophies"] = 0
+    rankings[top_user_id]["trophies"] += 1
     save_json(rankings, RANK_FILE)
     
-    sticker = generate_trophy_sticker(name, "WEEKLY CHAMPION")
-    text = f"🏆 **WEEKLY CHAMPION!**\n\nCongratulations **{name}**! You won +1 Trophy!\nKeep grinding 🔥"
-    bot.send_message(message.chat.id, text)
-    if sticker: bot.send_sticker(message.chat.id, sticker)
+    sticker_stream = generate_trophy_sticker(winner_name, "WEEKLY CHAMPION")
+    announcement_text = f"🚨 **WEEKLY CHAMPION ANNOUNCEMENT!** 🚨\n━━━━━━━━━━━━━━━━━━━\n\nCongratulations to {winner_name} for dominating the leaderboard! 🏆\n\nYou have been awarded +1 Trophy!\nKeep coding, keep inspiring! 💻🔥"
+    bot.send_message(message.chat.id, announcement_text)
+    if sticker_stream: bot.send_sticker(message.chat.id, sticker_stream)
 
-# ================= RANK & LEADERBOARD =================
-@bot.message_handler(func=lambda m: m.text and any(x in m.text.lower() for x in ['my rank', 'rank', 'cg my rank']))
-def my_rank(message):
-    uid = str(message.from_user.id)
-    if uid not in rankings:
-        rankings[uid] = {"points": 0, "name": message.from_user.first_name, "trophies": 0}
-    data = rankings[uid]
-    sorted_r = sorted(rankings.items(), key=lambda x: x[1].get('points', 0), reverse=True)
-    pos = next((i+1 for i, (u, _) in enumerate(sorted_r) if u == uid), len(rankings))
-    
-    bot.reply_to(message, f"""🏅 **YOUR RANK**
-👤 {message.from_user.first_name}
-⭐ XP: **{data['points']}**
-📍 Rank: **#{pos}**
-🏆 Trophies: **{data.get('trophies', 0)}**""")
+# ================= BOUNTY SYSTEM (original) =================
+@bot.message_handler(commands=['setbounty', 'bounty', 'submit', 'review'])
+def handle_coding_commands(message):
+    # (same as your original code - no change)
+    cmd = message.text.split()[0].lower()
+    if cmd == '/setbounty':
+        if message.from_user.username != BOSS_ADMIN_RAW: return bot.reply_to(message, "🚫 Only Boss Admin!")
+        parts = message.text.split(maxsplit=1)
+        if len(parts) < 2: return bot.reply_to(message, "⚠️ Usage: `/setbounty [task]`")
+        bounty_data["current_bounty"] = parts[1]
+        bounty_data["winners"] = [] 
+        save_json(bounty_data, BOUNTY_FILE)
+        bot.send_message(message.chat.id, f"🏆 **NEW BOUNTY!**\n{parts[1]}")
+    elif cmd == '/submit':
+        # ... (full original code kept)
+        user_id = str(message.from_user.id)
+        if user_id in bounty_data.get("winners", []): return bot.reply_to(message, "⚠️ Already solved!")
+        parts = message.text.split(maxsplit=1)
+        if len(parts) < 2: return bot.reply_to(message, "⚠️ Usage: `/submit [code]`")
+        bot.send_chat_action(message.chat.id, 'typing')
+        eval_result = get_grok_reply(user_id, parts[1], message.from_user.first_name, is_bounty_eval=True)
+        if eval_result and eval_result.startswith("PASS"):
+            bounty_data["winners"].append(user_id)
+            save_json(bounty_data, BOUNTY_FILE)
+            if user_id not in rankings: rankings[user_id] = {"points": 0, "name": message.from_user.first_name, "trophies": 0, "last_active_date": datetime.now().strftime("%Y-%m-%d")}
+            rankings[user_id]["points"] += 200
+            save_json(rankings, RANK_FILE)
+            bot.reply_to(message, f"🎉 **BOUNTY CLEARED!**\n{eval_result}\n\n🏆 +200 XP earned!")
+        else: bot.reply_to(message, f"❌ **BOUNTY FAILED!**\n{eval_result if eval_result else 'Syntax error.'}")
+    elif cmd == '/review':
+        parts = message.text.split(maxsplit=1)
+        if len(parts) < 2: return bot.reply_to(message, "⚠️ Usage: `/review [code]`")
+        bot.send_chat_action(message.chat.id, 'typing')
+        ai_review = get_grok_reply(str(message.from_user.id), parts[1], message.from_user.first_name, is_code_review=True)
+        if ai_review: bot.reply_to(message, f"👨‍💻 **Code Review:**\n{ai_review}")
 
-@bot.message_handler(func=lambda m: m.text and any(x in m.text.lower() for x in ['leaderboard', 'top', 'lb']))
-def leaderboard(message):
-    sorted_r = sorted(rankings.items(), key=lambda x: x[1].get('points', 0), reverse=True)[:10]
-    txt = "🏆 **COTG LEADERBOARD**\n\n"
-    for i, (_, d) in enumerate(sorted_r, 1):
-        txt += f"`#{i}` {d['name']} — **{d['points']}** XP\n"
-    bot.reply_to(message, txt)
-
-# ================= MAIN HANDLER (FIXED TRIGGERS) =================
+# ================= MAIN CHAT HANDLER (fixed + improved) =================
 @bot.message_handler(func=lambda message: True)
-def main_handler(message):
+def smart_chat_handler(message):
+    global interject_counter
     if not message.text: return
+        
     text = message.text.strip()
     text_lower = text.lower()
-    uid = str(message.from_user.id)
-    name = message.from_user.first_name
+    chat_id = message.chat.id
+    username = message.from_user.username if message.from_user.username else message.from_user.first_name
+    user_id = str(message.from_user.id)
+    is_boss = (message.from_user.username == BOSS_ADMIN_RAW)
 
-    # Give points
-    if uid not in rankings:
-        rankings[uid] = {"points": 0, "name": name, "trophies": 0}
-    rankings[uid]["points"] += 2
-    rankings[uid]["name"] = name
-    save_json(rankings, RANK_FILE)
-
-    # Strong trigger for "Cg", "Hay", "Ch", "Hello" etc.
-    short_triggers = ['cg', 'hay', 'ch', 'hello', 'hi', 'help']
-    is_triggered = (
-        text_lower in short_triggers or
-        text_lower.startswith('cg ') or
-        ' cg ' in f" {text_lower} " or
-        (BOT_USERNAME and BOT_USERNAME in text_lower) or
-        message.chat.type == 'private' or
-        (message.reply_to_message and message.reply_to_message.from_user.id == BOT_ID)
-    )
-
-    if is_triggered:
-        bot.send_chat_action(message.chat.id, 'typing')
-        
-        # Quick English replies for short messages
-        if text_lower in ['cg', 'hay', 'ch', 'hello', 'hi']:
-            bot.reply_to(message, f"Hello {name}! 👋 I'm active and ready. How can I help you with Code on the Go today?")
+    # BAD WORDS FILTER
+    if not is_boss and any(bad in text_lower for bad in BAD_WORDS):
+        try:
+            bot.delete_message(chat_id, message.message_id)
+            bot.reply_to(message, "⚠️ Please keep the chat clean!")
             return
-        if 'help' in text_lower:
-            bot.reply_to(message, "Type /help for full menu or just ask me anything about Android development!")
-            return
+        except: pass
 
-        # Full AI
-        reply = get_grok_reply(uid, text, name)
-        if reply:
-            bot.reply_to(message, reply)
+    # LINK FILTER (original)
+    if not is_boss:
+        found_urls = URL_PATTERN.findall(text)
+        if found_urls:
+            is_spam = False
+            for url in found_urls:
+                if not any(domain in url for domain in ALLOWED_DOMAINS): is_spam = True; break
+            if is_spam:
+                try:
+                    bot.delete_message(chat_id, message.message_id)
+                    if user_id in rankings:
+                        rankings[user_id]["points"] = max(0, rankings[user_id]["points"] - 10)
+                        save_json(rankings, RANK_FILE)
+                    return 
+                except: pass
+
+    # ACCEPTED ANSWER XP
+    ACCEPT_WORDS = ['thanks', 'thank you', 'worked', 'solved', 'fix ho gaya', 'perfect']
+    if message.reply_to_message and message.reply_to_message.from_user.id != message.from_user.id:
+        if any(word in text_lower for word in ACCEPT_WORDS):
+            helper_id = str(message.reply_to_message.from_user.id)
+            helper_name = message.reply_to_message.from_user.first_name
+            if helper_id != str(BOT_ID): 
+                if helper_id not in rankings: rankings[helper_id] = {"points": 0, "name": helper_name, "trophies": 0, "last_active_date": datetime.now().strftime("%Y-%m-%d")}
+                rankings[helper_id]["points"] += 50
+                save_json(rankings, RANK_FILE)
+                bot.reply_to(message.reply_to_message, f"🌟 **Accepted Answer!**\n@{username} marked this as helpful.\n🎉 **+50 XP** awarded to {helper_name}!")
+
+    # POINTS TRACKING (original)
+    if message.chat.type in ['group', 'supergroup']:
+        current_time_str = datetime.now().strftime("%Y-%m-%d")
+        if user_id not in rankings: rankings[user_id] = {"points": 0, "name": username, "trophies": 0, "last_active_date": current_time_str}
+        rankings[user_id]["last_active_date"] = current_time_str
+        rankings[user_id]["name"] = username
+        current_time = time.time()
+        if current_time - user_cooldown.get(user_id, 0) > 60:
+            rankings[user_id]["points"] += 1  
+            user_cooldown[user_id] = current_time
+        save_json(rankings, RANK_FILE)
+        interject_counter += 1
+
+    # RANK & LEADERBOARD (original)
+    if text_lower in ['my rank', 'rank', 'cg my rank']:
+        data = rankings.get(user_id, {"points": 0, "trophies": 0})
+        sorted_users = sorted(rankings.items(), key=lambda x: x[1].get('points', 0), reverse=True)
+        position = next((index for index, (uid, _) in enumerate(sorted_users) if uid == user_id), len(sorted_users)) + 1
+        return bot.reply_to(message, f"🏆 *Your Rank Card*\n👤 {username}\n⭐ XP: **{data.get('points', 0)}**\n🥇 Position: **#{position}** out of {len(rankings)} devs\n🏆 Trophies: **{data.get('trophies', 0)}**\n🏅 Title: {get_title(data.get('points', 0))}")
+
+    if text_lower in ['leaderboard', 'top']:
+        sorted_users = sorted(rankings.items(), key=lambda x: x[1].get('points', 0), reverse=True)[:10]
+        lb_text = "🏅 *COTG Leaderboard*\n━━━━━━━━━━━━━━━━━━━\n"
+        for i, (uid, data) in enumerate(sorted_users, 1): 
+            trophy_str = f"({data.get('trophies', 0)}🏆)" if data.get('trophies', 0) > 0 else ""
+            lb_text += f"**#{i}** {data['name']} {trophy_str} — {data.get('points', 0)} XP\n"
+        return bot.reply_to(message, lb_text)
+
+    # STRONG SHORT REPLIES (new + fast)
+    short_replies = {
+        'cg': f"Hello {username}! 👋 I am active and ready. How can I help you today?",
+        'hay': f"Hey {username}! What's up bro? Ready to code?",
+        'ch': f"Chal bhai, bol kya scene hai? 🔥",
+        'hello': f"Hello {username}! 👋 I am active and ready.",
+        'hi': f"Hi {username}! 👋 Type /help for menu.",
+        'help': "Type /help for full menu or just chat with me!"
+    }
+    if text_lower in short_replies:
+        return bot.reply_to(message, short_replies[text_lower])
+
+    # SMART AI TRIGGER (improved)
+    bot_triggered = False
+    if "cg" in text_lower or f"@{BOT_NAME.lower()}" in text_lower or message.chat.type == 'private': bot_triggered = True
+    elif message.reply_to_message and message.reply_to_message.from_user.id == BOT_ID: bot_triggered = True
+    elif interject_counter >= 15: bot_triggered = True; interject_counter = 0
+
+    if bot_triggered:
+        bot.send_chat_action(chat_id, 'typing')
+        ai_reply = get_grok_reply(user_id, text, username)
+        if ai_reply: 
+            bot.reply_to(message, ai_reply, disable_web_page_preview=True)
         else:
-            bot.reply_to(message, "Hey bro, give me 5 seconds... my brain is loading 🔥")
+            bot.reply_to(message, "🧠 My AI brain is a bit busy... Try again in 10 seconds or ask me anything!")
 
-print("🚀 CG Bot V4.0 — New Token + Dual Groq Keys + Fixed Replies LIVE!")
+try: bot.delete_webhook(drop_pending_updates=True); time.sleep(2)
+except: pass
 keep_alive()
+print("🚀 CG Bot V4.5 - FULL ORIGINAL + DUAL KEY + WELCOME + ALL FIXES LIVE!")
 bot.polling(none_stop=True)
