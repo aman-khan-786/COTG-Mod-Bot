@@ -121,7 +121,6 @@ def get_main_menu():
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("📢 Join Official Channel", url="https://t.me/CodeOnTheGoOfficial"))
     markup.row(InlineKeyboardButton("📜 Group Rules", callback_data="show_rules"), InlineKeyboardButton("🚀 About COTG IDE", callback_data="show_ide_info"))
-    # ADMIN BUTTON IS BACK!
     markup.row(InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{BOSS_ADMIN}"), InlineKeyboardButton("❌ Close", callback_data="close_menu"))
     return markup
 
@@ -190,13 +189,23 @@ def welcome_members(message):
 @bot.message_handler(commands=['review'])
 def code_reviewer(message):
     try:
-        code_to_review = message.text.split(maxsplit=1)[1]
+        raw_text = message.text.strip()
+        # Bulletproof code extraction
+        if len(raw_text) <= 7:
+            return bot.reply_to(message, "⚠️ Usage: `/review [paste your kotlin/java code here]`")
+        
+        code_to_review = raw_text[7:].strip()
+        
         bot.send_chat_action(message.chat.id, 'typing')
         bot.reply_to(message, "🔍 **Judging your code...**")
+        
         ai_review = get_grok_reply(str(message.from_user.id), code_to_review, message.from_user.first_name, is_code_review=True)
-        if ai_review: bot.reply_to(message, f"👨‍💻 **Code Review:**\n{DIVIDER}\n{ai_review}")
-        else: bot.reply_to(message, "⚠️ Too many bugs, my brain crashed. Try again.")
-    except: bot.reply_to(message, "⚠️ Usage: `/review [paste your kotlin/java code here]`")
+        if ai_review: 
+            bot.reply_to(message, f"👨‍💻 **Code Review:**\n{DIVIDER}\n{ai_review}")
+        else: 
+            bot.reply_to(message, "⚠️ Too many bugs, my brain crashed. Try again.")
+    except Exception as e: 
+        bot.reply_to(message, f"⚠️ Error in review: {str(e)}")
 
 @bot.message_handler(commands=['savecode'])
 def save_code(message):
@@ -324,5 +333,5 @@ try:
 except: pass
 
 keep_alive()
-print("V22 SARCASM & ENGLISH Bot is LIVE!")
+print("V23 SARCASM & REVIEW FIX Bot is LIVE!")
 bot.polling(none_stop=True)
