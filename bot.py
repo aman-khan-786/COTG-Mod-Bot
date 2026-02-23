@@ -10,7 +10,6 @@ import re
 import threading
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
-import urllib.request
 
 # === PILLOW FOR DYNAMIC STICKERS ===
 from PIL import Image, ImageDraw, ImageFont
@@ -66,6 +65,19 @@ def get_title(points):
 ALLOWED_DOMAINS = ['github.com', 'stackoverflow.com', 'pastebin.com', 'appdevforall.org', 'developer.android.com', 't.me/CodeOnTheGoOfficial']
 URL_PATTERN = re.compile(r'(https?://\S+|www\.\S+)')
 
+# ================= AUTO-FONT DOWNLOADER =================
+FONT_FILE = "clean_font.ttf"
+FONT_URL = "https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Black.ttf"
+
+if not os.path.exists(FONT_FILE):
+    try:
+        print("Downloading fresh font...")
+        r = requests.get(FONT_URL)
+        with open(FONT_FILE, 'wb') as f:
+            f.write(r.content)
+    except Exception as e:
+        print(f"Font download failed: {e}")
+
 # ================= FOOLPROOF STICKER GENERATOR ENGINE =================
 def generate_trophy_sticker(username, title="WEEKLY CHAMPION"):
     try:
@@ -73,36 +85,22 @@ def generate_trophy_sticker(username, title="WEEKLY CHAMPION"):
         draw = ImageDraw.Draw(img)
         img_w, img_h = img.size
         
-        # 1. Auto-Font Downloader (Agar font.ttf fail hua toh yeh chalega)
-        font_path = "font.ttf"
-        fallback_path = "roboto_black.ttf"
-        
-        if not os.path.exists(font_path):
-            try:
-                urllib.request.urlretrieve("https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Black.ttf", fallback_path)
-                font_path = fallback_path
-            except: pass
-
-        # 2. Load Fonts (Huge Size)
+        # Load Safe Downloaded Font
         try:
-            font_large = ImageFont.truetype(font_path, 50)
-            font_small = ImageFont.truetype(font_path, 40)
-        except:
-            try:
-                if not os.path.exists(fallback_path):
-                    urllib.request.urlretrieve("https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Black.ttf", fallback_path)
-                font_large = ImageFont.truetype(fallback_path, 50)
-                font_small = ImageFont.truetype(fallback_path, 40)
-            except:
-                font_large = ImageFont.load_default()
-                font_small = ImageFont.load_default()
+            font_large = ImageFont.truetype(FONT_FILE, 45)
+            font_small = ImageFont.truetype(FONT_FILE, 35)
+        except Exception as e:
+            print(f"Font Load Error: {e}")
+            font_large = ImageFont.load_default()
+            font_small = ImageFont.load_default()
 
-        # 3. Draw Text (Perfectly Centered using anchor="mm")
-        # Y=220 for white circle center, Y=420 for bottom ribbon center
-        draw.text((img_w / 2, 220), title.upper(), fill="black", font=font_large, anchor="mm")
-        draw.text((img_w / 2, 420), username.upper(), fill="black", font=font_small, anchor="mm")
+        # Draw Title (Center of White Circle - Y=200)
+        draw.text((img_w / 2, 200), title.upper(), fill="black", font=font_large, anchor="mm")
 
-        # 4. Export
+        # Draw Username (Center of Bottom Ribbon - Y=400)
+        draw.text((img_w / 2, 400), username.upper(), fill="black", font=font_small, anchor="mm")
+
+        # Export to WebP
         bio = io.BytesIO()
         bio.name = 'sticker.webp'
         img.save(bio, 'WEBP')
@@ -135,7 +133,6 @@ chat_memory = {}
 def get_grok_reply(user_id, user_msg, username, is_code_review=False, is_bounty_eval=False):
     global chat_memory
     try:
-        # HARDCORE BOSS INSTRUCTION ADDED HERE
         core_rules = f"IDENTITY: You are CG, expert dev assistant for COTG. Your creator, admin, and ultimate BOSS is Ben (@{BOSS_ADMIN_RAW}). If anyone asks who made you, who is the admin, or who is your boss, firmly state that Ben created you and provides updates. Never call yourself an AI or language model. Strictly English."
         
         if is_code_review:
@@ -295,7 +292,15 @@ def smart_chat_handler(message):
                     return 
                 except: pass
 
-    # --- 2. ACCEPTED ANSWER (XP BOOST) ---
+    # --- 2. BASIC COMMANDS (RESTORED!) ---
+    if text_lower in ['help', '/help', 'rules', '/rules', 'menu', 'hello', 'hi', 'start', '/start']:
+        welcome_text = (f"Hello @{username}! I am **CG** 🤖\n"
+                        f"Official COTG Bot. My boss is @{BOSS_ADMIN_MD}.\n\n"
+                        f"📢 **Join Official Channel:** [CodeOnTheGoOfficial]({OFFICIAL_CHANNEL})\n"
+                        f"🌐 **Website:** [{OFFICIAL_WEBSITE}]({OFFICIAL_WEBSITE})")
+        return bot.reply_to(message, welcome_text, reply_markup=get_main_menu(), disable_web_page_preview=True)
+
+    # --- 3. ACCEPTED ANSWER (XP BOOST) ---
     ACCEPT_WORDS = ['thanks', 'thank you', 'worked', 'solved', 'fix ho gaya', 'perfect']
     if message.reply_to_message and message.reply_to_message.from_user.id != message.from_user.id:
         if any(word in text_lower for word in ACCEPT_WORDS):
@@ -307,7 +312,7 @@ def smart_chat_handler(message):
                 save_json(rankings, RANK_FILE)
                 bot.reply_to(message.reply_to_message, f"🌟 **Accepted Answer!**\n@{username} marked this as helpful.\n🎉 **+50 XP** awarded to {helper_name}!")
 
-    # --- 3. POINTS TRACKING ---
+    # --- 4. POINTS TRACKING ---
     if message.chat.type in ['group', 'supergroup']:
         current_time_str = datetime.now().strftime("%Y-%m-%d")
         if user_id not in rankings: rankings[user_id] = {"points": 0, "name": username, "trophies": 0, "last_active_date": current_time_str}
@@ -323,7 +328,7 @@ def smart_chat_handler(message):
         save_json(rankings, RANK_FILE)
         interject_counter += 1
 
-    # --- 4. RANK & LEADERBOARD ---
+    # --- 5. RANK & LEADERBOARD ---
     if text_lower in ['my rank', 'rank']:
         data = rankings.get(user_id, {"points": 0, "trophies": 0})
         sorted_users = sorted(rankings.items(), key=lambda x: x[1].get('points', 0), reverse=True)
@@ -339,7 +344,7 @@ def smart_chat_handler(message):
             lb_text += f"**#{i}** {data['name']} {trophy_str} — {data.get('points', 0)} XP\n"
         return bot.reply_to(message, lb_text)
 
-    # --- 5. SMART AI ---
+    # --- 6. SMART AI ---
     bot_triggered = False
     if "cg" in text_lower or f"@{BOT_NAME.lower()}" in text_lower or message.chat.type == 'private': bot_triggered = True
     elif message.reply_to_message and message.reply_to_message.from_user.id == BOT_ID: bot_triggered = True
@@ -354,5 +359,5 @@ def smart_chat_handler(message):
 try: bot.delete_webhook(drop_pending_updates=True); time.sleep(2)
 except: pass
 keep_alive()
-print("V32 FOOLPROOF MASTER BOT IS LIVE!")
+print("V33 AUTO-FONT FIX BOT IS LIVE!")
 bot.polling(none_stop=True)
