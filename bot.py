@@ -19,7 +19,6 @@ import io
 # ================= NEW CONFIG =================
 TOKEN = '8515104266:AAF_hv7wTh238-mjnYkKeLGL0Q5tcC2ykks'
 
-# DUAL GROQ KEYS - AUTO FALLBACK
 GROQ_KEYS = [
     "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",
     "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"
@@ -150,7 +149,7 @@ def get_grok_reply(user_id, user_msg, username, is_code_review=False, is_matchma
 def morning_scheduler():
     while True:
         now = datetime.utcnow()
-        if now.hour == 2 and now.minute == 30: # 8:00 AM IST
+        if now.hour == 2 and now.minute == 30: # approx 8:00 AM IST
             group_id = group_config.get("main_group_id")
             if group_id:
                 try:
@@ -193,7 +192,7 @@ def welcome_new_members(message):
         name = member.first_name
         
         if uid not in rankings:
-            rankings[uid] = {"points": 0, "name": name, "skills": {"compose": 0, "kotlin": 0}, "last_active_date": datetime.now().strftime("%Y-%m-%d")}
+            rankings[uid] = {"points": 0, "name": name, "claimed_bonus": False, "last_active_date": datetime.now().strftime("%Y-%m-%d")}
             save_json(rankings, RANK_FILE)
             
         welcome_text = (f"🎉 *Welcome to COTG, {name}!* 🎉\n\n"
@@ -223,24 +222,50 @@ def set_morning_group(message):
     else:
         bot.reply_to(message, "🚫 Only Boss Admin can set this.")
 
+# --- THE SMART FAKE VERIFICATION ---
 @bot.message_handler(commands=['claim'])
 def claim_channel_reward(message):
-    user_id = message.from_user.id
-    uid_str = str(user_id)
-    try:
-        member = bot.get_chat_member(OFFICIAL_CHANNEL_ID, user_id)
-        if member.status in ['member', 'administrator', 'creator']:
-            if uid_str not in rankings: rankings[uid_str] = {"points": 0, "name": message.from_user.first_name}
-            if rankings[uid_str].get("claimed_bonus"):
-                return bot.reply_to(message, "⚠️ You have already claimed your welcome bonus!")
-            rankings[uid_str]["points"] += 100
-            rankings[uid_str]["claimed_bonus"] = True
-            save_json(rankings, RANK_FILE)
-            bot.reply_to(message, f"🎉 **AWESOME!** Thank you for joining the channel.\n\nYou have received **+100 XP**! Check your `/rank`.")
-        else:
-            bot.reply_to(message, f"❌ You haven't joined the channel yet!\nPlease join {OFFICIAL_CHANNEL_ID} first, then type `/claim`.")
-    except Exception as e:
-        bot.reply_to(message, f"⚠️ Ensure I am an admin in the channel so I can check your membership.")
+    uid_str = str(message.from_user.id)
+    
+    if uid_str not in rankings: 
+        rankings[uid_str] = {"points": 0, "name": message.from_user.first_name, "claimed_bonus": False}
+        
+    # Strictly Ek User Ek Baar Check
+    if rankings[uid_str].get("claimed_bonus"):
+        return bot.reply_to(message, "⚠️ Smart move! But you have ALREADY claimed your welcome bonus. Ek user sirf ek hi baar claim kar sakta hai! 😉")
+        
+    # Growth Hacker Fake Suspense
+    bot.send_chat_action(message.chat.id, 'typing')
+    checking_msg = bot.reply_to(message, "🔍 Verifying your channel membership with Telegram API...")
+    time.sleep(2.5) 
+    
+    # Give points
+    rankings[uid_str]["points"] += 100
+    rankings[uid_str]["claimed_bonus"] = True
+    save_json(rankings, RANK_FILE)
+    
+    success_text = f"🎉 **VERIFICATION SUCCESSFUL!**\n\nThank you for joining {OFFICIAL_CHANNEL_ID}! You have received your **+100 XP** bonus.\nType `/rank` to see your new level! 💻🔥"
+    
+    try: bot.edit_message_text(success_text, chat_id=message.chat.id, message_id=checking_msg.message_id, parse_mode='Markdown')
+    except: bot.send_message(message.chat.id, success_text, parse_mode='Markdown')
+
+# --- NEW: DAILY REWARD ---
+@bot.message_handler(commands=['daily'])
+def daily_reward(message):
+    uid_str = str(message.from_user.id)
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    if uid_str not in rankings:
+        rankings[uid_str] = {"points": 0, "name": message.from_user.first_name, "last_daily": ""}
+
+    if rankings[uid_str].get("last_daily") == today:
+        return bot.reply_to(message, "⏳ You already collected your daily XP today! Come back tomorrow. 🌅")
+
+    rankings[uid_str]["points"] += 15
+    rankings[uid_str]["last_daily"] = today
+    save_json(rankings, RANK_FILE)
+
+    bot.reply_to(message, "🎁 **DAILY REWARD CLAIMED!**\n\nYou got **+15 XP** for being active today. Keep coding! 💻🔥")
 
 @bot.message_handler(commands=['start', 'help', 'menu', 'rules'])
 def welcome_command(message):
@@ -371,15 +396,11 @@ except:
     pass
 
 keep_alive()
-print("🚀 CG Bot V37 - 24/7 AUTO-RESTART ZIDDI FIX LIVE!")
+print("🚀 CG Bot V38 - GROWTH HACKER & DAILY REWARD LIVE!")
 
-# === ZIDDI LOOP (AUTO-RESTART ON CRASH) ===
 while True:
     try:
-        # Bot messages sunna start karega
         bot.polling(none_stop=True, interval=0, timeout=60)
     except Exception as e:
-        # Agar raat ko koi error ya network drop aaya, toh crash nahi hoga
-        print(f"⚠️ Bot connection dropped! Error: {e}")
-        print("🔄 Restarting bot in 5 seconds...")
+        print(f"⚠️ Connection dropped! Error: {e}")
         time.sleep(5)
