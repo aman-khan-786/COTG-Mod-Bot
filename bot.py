@@ -19,6 +19,7 @@ import io
 # ================= NEW CONFIG =================
 TOKEN = '8515104266:AAF_hv7wTh238-mjnYkKeLGL0Q5tcC2ykks'
 
+# DUAL GROQ KEYS - AUTO FALLBACK
 GROQ_KEYS = [
     "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",
     "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"
@@ -26,7 +27,7 @@ GROQ_KEYS = [
 
 BOSS_ADMIN_RAW = 'Ben_ADFA'
 OFFICIAL_CHANNEL = "https://t.me/CodeOnTheGoOfficial"
-OFFICIAL_CHANNEL_ID = "@CodeOnTheGoOfficial" # For checking membership
+OFFICIAL_CHANNEL_ID = "@CodeOnTheGoOfficial" 
 OFFICIAL_WEBSITE = "http://appdevforall.org/codeonthego"
 
 bot = telebot.TeleBot(TOKEN, parse_mode='Markdown')
@@ -37,7 +38,7 @@ except: BOT_ID = None
 # ================= DATABASES =================
 RANK_FILE = 'rankings.json'
 BOUNTY_FILE = 'bounty.json'
-CONFIG_FILE = 'group_config.json' # To save group ID for morning messages
+CONFIG_FILE = 'group_config.json' 
 
 def load_json(file_path):
     if os.path.exists(file_path):
@@ -118,7 +119,6 @@ chat_memory = {}
 def get_grok_reply(user_id, user_msg, username, is_code_review=False, is_matchmaker=False):
     for api_key in GROQ_KEYS: 
         try:
-            # STRICT ADMIN RULE APPLIED HERE
             core_rules = f"IDENTITY: You are CG, expert dev assistant for COTG. Your creator and ONLY Admin/Boss is EXACTLY @{BOSS_ADMIN_RAW} (Ben). If anyone asks about admin, boss, or creator, reply with: 'My boss and admin is Ben (@{BOSS_ADMIN_RAW}).' Do not use any other username. Strictly English."
             
             if is_code_review:
@@ -146,30 +146,27 @@ def get_grok_reply(user_id, user_msg, username, is_code_review=False, is_matchma
             continue
     return None
 
-# ================= DAILY MORNING ROUTINE (NextGen) =================
+# ================= DAILY MORNING ROUTINE =================
 def morning_scheduler():
     while True:
-        # Check time (Running UTC, so approx 2:30 AM UTC = 8:00 AM IST)
         now = datetime.utcnow()
-        if now.hour == 2 and now.minute == 30:
+        if now.hour == 2 and now.minute == 30: # 8:00 AM IST
             group_id = group_config.get("main_group_id")
             if group_id:
                 try:
-                    # 1. Motivational Message
-                    msg = "🌅 **Good Morning Devs!** ☕\n\nWake up, grab your coffee, and let's build something amazing today! Whether it's fixing that UI bug in Jetpack Compose or publishing a new app, keep grinding on Code on the Go! 💻🔥"
+                    msg = "🌅 **Good Morning Devs!** ☕\n\nWake up, grab your coffee, and let's build something amazing today! Keep grinding on Code on the Go! 💻🔥"
                     bot.send_message(group_id, msg)
                     
-                    # 2. Daily Quiz
                     quizzes = [
                         {"q": "What is the primary language used for Jetpack Compose?", "o": ["Java", "Kotlin", "C++", "Dart"], "a": 1},
-                        {"q": "Which modifier is used to make a Composable clickable?", "o": ["Modifier.click()", "Modifier.clickable()", "Modifier.tap()", "Modifier.press()"], "a": 1},
+                        {"q": "Which modifier makes a Composable clickable?", "o": ["Modifier.click()", "Modifier.clickable()", "Modifier.tap()", "Modifier.press()"], "a": 1},
                         {"q": "What is Android's latest UI toolkit called?", "o": ["XML Views", "Flutter", "Jetpack Compose", "React Native"], "a": 2}
                     ]
                     quiz = random.choice(quizzes)
                     bot.send_poll(group_id, quiz["q"], quiz["o"], is_anonymous=False, type='quiz', correct_option_id=quiz["a"])
                 except Exception as e:
                     print(f"Morning routine failed: {e}")
-            time.sleep(60) # Sleep 1 minute to avoid sending twice
+            time.sleep(60) 
         time.sleep(30)
 
 threading.Thread(target=morning_scheduler, daemon=True).start()
@@ -186,9 +183,8 @@ def get_main_menu():
 def callback_query(call):
     if call.data == "close_menu": bot.delete_message(call.message.chat.id, call.message.message_id)
 
-# ================= ORDERED HANDLERS (CRITICAL FOR WELCOME MSG) =================
+# ================= HANDLERS =================
 
-# 1. NEW MEMBER WELCOME (Must be at the top)
 @bot.message_handler(content_types=['new_chat_members'])
 def welcome_new_members(message):
     for member in message.new_chat_members:
@@ -206,7 +202,6 @@ def welcome_new_members(message):
                         f"Type `/help` to see what I can do.")
         bot.reply_to(message, welcome_text, reply_markup=get_main_menu())
 
-# 2. MEDIA HANDLER
 @bot.message_handler(content_types=['sticker', 'animation', 'video_note'])
 def handle_media(message):
     user_id = str(message.from_user.id)
@@ -219,7 +214,6 @@ def handle_media(message):
                 save_json(rankings, RANK_FILE)
         except: pass
 
-# 3. COMMANDS
 @bot.message_handler(commands=['setgroup'])
 def set_morning_group(message):
     if message.from_user.username == BOSS_ADMIN_RAW:
@@ -234,15 +228,11 @@ def claim_channel_reward(message):
     user_id = message.from_user.id
     uid_str = str(user_id)
     try:
-        # Check if user is in channel
         member = bot.get_chat_member(OFFICIAL_CHANNEL_ID, user_id)
         if member.status in ['member', 'administrator', 'creator']:
             if uid_str not in rankings: rankings[uid_str] = {"points": 0, "name": message.from_user.first_name}
-            
-            # Check if already claimed (prevent spam)
             if rankings[uid_str].get("claimed_bonus"):
                 return bot.reply_to(message, "⚠️ You have already claimed your welcome bonus!")
-                
             rankings[uid_str]["points"] += 100
             rankings[uid_str]["claimed_bonus"] = True
             save_json(rankings, RANK_FILE)
@@ -250,7 +240,7 @@ def claim_channel_reward(message):
         else:
             bot.reply_to(message, f"❌ You haven't joined the channel yet!\nPlease join {OFFICIAL_CHANNEL_ID} first, then type `/claim`.")
     except Exception as e:
-        bot.reply_to(message, f"⚠️ Ensure I am an admin in the channel so I can check your membership, or channel ID is correct.")
+        bot.reply_to(message, f"⚠️ Ensure I am an admin in the channel so I can check your membership.")
 
 @bot.message_handler(commands=['start', 'help', 'menu', 'rules'])
 def welcome_command(message):
@@ -285,7 +275,6 @@ def announce_weekly_winner(message):
     bot.send_message(message.chat.id, f"🚨 **WEEKLY CHAMPION!** 🚨\n\nCongrats {top_user_data['name']}! 🏆 (+1 Trophy)\nKeep coding!")
     if sticker_stream: bot.send_sticker(message.chat.id, sticker_stream)
 
-# 4. MAIN TEXT HANDLER
 @bot.message_handler(content_types=['text'])
 def smart_chat_handler(message):
     global interject_counter
@@ -296,7 +285,6 @@ def smart_chat_handler(message):
     user_id = str(message.from_user.id)
     is_boss = (message.from_user.username == BOSS_ADMIN_RAW)
 
-    # --- BAD WORDS & LINKS ---
     if not is_boss:
         if any(bad in text_lower for bad in BAD_WORDS):
             try: bot.delete_message(chat_id, message.message_id); bot.reply_to(message, "⚠️ Watch your language!")
@@ -316,9 +304,7 @@ def smart_chat_handler(message):
                 except: pass
                 return 
 
-    # --- SMART DEV MATCHMAKER (NextGen Feature) ---
     if "?" in text and any(k in text_lower for k in ["error", "bug", "crash", "compose", "kotlin", "how to"]):
-        # Find top expert
         expert_name = None
         expert_points = -1
         for uid, data in rankings.items():
@@ -332,7 +318,6 @@ def smart_chat_handler(message):
             bot.reply_to(message, match_msg)
             return
 
-    # --- ACCEPTED ANSWER ---
     ACCEPT_WORDS = ['thanks', 'thank you', 'worked', 'solved', 'fix ho gaya', 'perfect']
     if message.reply_to_message and message.reply_to_message.from_user.id != message.from_user.id:
         if any(word in text_lower for word in ACCEPT_WORDS):
@@ -344,7 +329,6 @@ def smart_chat_handler(message):
                 save_json(rankings, RANK_FILE)
                 bot.reply_to(message.reply_to_message, f"🌟 **Accepted Answer!**\n@{username} marked this helpful.\n🎉 **+50 XP** to {helper_name}!")
 
-    # --- POINTS TRACKING ---
     if message.chat.type in ['group', 'supergroup']:
         if user_id not in rankings: rankings[user_id] = {"points": 0, "name": username}
         rankings[user_id]["name"] = username
@@ -355,7 +339,6 @@ def smart_chat_handler(message):
         save_json(rankings, RANK_FILE)
         interject_counter += 1
 
-    # --- RANK & LEADERBOARD ---
     if text_lower in ['my rank', 'rank', 'cg my rank']:
         data = rankings.get(user_id, {"points": 0, "trophies": 0})
         sorted_users = sorted(rankings.items(), key=lambda x: x[1].get('points', 0), reverse=True)
@@ -370,7 +353,6 @@ def smart_chat_handler(message):
             lb_text += f"**#{i}** {data['name']} {trophy_str} — {data.get('points', 0)} XP\n"
         return bot.reply_to(message, lb_text)
 
-    # --- AI TRIGGER ---
     bot_triggered = False
     if "cg" in text_lower or f"@{BOT_NAME.lower()}" in text_lower or message.chat.type == 'private': bot_triggered = True
     elif message.reply_to_message and message.reply_to_message.from_user.id == BOT_ID: bot_triggered = True
@@ -382,8 +364,22 @@ def smart_chat_handler(message):
         ai_reply = get_grok_reply(user_id, text, username)
         if ai_reply: bot.reply_to(message, ai_reply, disable_web_page_preview=True)
 
-try: bot.delete_webhook(drop_pending_updates=True); time.sleep(2)
-except: pass
+try: 
+    bot.delete_webhook(drop_pending_updates=True)
+    time.sleep(2)
+except: 
+    pass
+
 keep_alive()
-print("🚀 CG Bot V5.0 - NEXTGEN FEATURES LIVE!")
-bot.polling(none_stop=True)
+print("🚀 CG Bot V37 - 24/7 AUTO-RESTART ZIDDI FIX LIVE!")
+
+# === ZIDDI LOOP (AUTO-RESTART ON CRASH) ===
+while True:
+    try:
+        # Bot messages sunna start karega
+        bot.polling(none_stop=True, interval=0, timeout=60)
+    except Exception as e:
+        # Agar raat ko koi error ya network drop aaya, toh crash nahi hoga
+        print(f"⚠️ Bot connection dropped! Error: {e}")
+        print("🔄 Restarting bot in 5 seconds...")
+        time.sleep(5)
